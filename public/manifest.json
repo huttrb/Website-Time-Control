@@ -1,0 +1,15 @@
+{
+  "name": "Website Time Control",
+  "description": "Control your time spent on websites.",
+  "version": "0.0.1",
+  "manifest_version": 3,
+  "permissions": ["tabs", "storage"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": "images/logo.png"
+  }
+}
