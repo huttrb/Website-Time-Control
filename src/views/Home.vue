@@ -650,7 +650,7 @@ function formattedTime(ms: number): string {
       <div v-else class="text-sm text-white/60">Активная вкладка не найдена</div>
     </div>
 
-    <div class="h-84 overflow-y-auto pr-2 custom-scrollbar">
+    <div class="h-83 overflow-y-auto pr-2 custom-scrollbar">
       <ul class="flex flex-col gap-4">
         <li
           v-for="{ site, value, filteredTime } in stats"
