@@ -1,32 +1,62 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useMainStore } from '../stores/main'
+import { TRACKED_HOSTS } from '../stores/tracked'
 
 const store = useMainStore()
 
 type TimeFilter = 'all' | 'today' | 'yesterday' | 'week' | 'month'
 type SortMode = 'nameAsc' | 'nameDesc' | 'timeDesc' | 'timeAsc'
 
-const timeFilter = ref<TimeFilter>('all')
+interface ActiveTabInfo {
+  title: string
+  host: string
+  site: string
+  favicon: string
+}
+
+interface ActiveTabChangeInfo {
+  url?: string
+  title?: string
+  favIconUrl?: string
+}
+
+const timeFilter = ref<TimeFilter>('today')
 const sortMode = ref<SortMode>('timeDesc')
 const isTimeOpen = ref(false)
 const isSortOpen = ref(false)
 const timeMenu = ref<HTMLElement | null>(null)
 const sortMenu = ref<HTMLElement | null>(null)
+const activeTab = ref<ActiveTabInfo | null>(null)
 
-const timeFilters: { value: TimeFilter; label: string }[] = [
-  { value: 'all', label: 'Всего' },
-  { value: 'today', label: 'Сегодня' },
-  { value: 'yesterday', label: 'Вчера' },
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
-]
+const timeFilters = computed<{ value: TimeFilter; label: string }[]>(() => {
+  const weekRange = statsDateRangeForFilter('week')
+  const monthRange = statsDateRangeForFilter('month')
+  const allRange = allStatsDateRange.value
+
+  return [
+    { value: 'today', label: 'Сегодня' },
+    { value: 'yesterday', label: 'Вчера' },
+    {
+      value: 'week',
+      label: `Неделя (${formatDate(weekRange.start)} - ${formatDate(weekRange.end)})`,
+    },
+    {
+      value: 'month',
+      label: `Месяц (${formatDate(monthRange.start)} - ${formatDate(monthRange.end)})`,
+    },
+    {
+      value: 'all',
+      label: `Всего (${formatDate(allRange.start)} - ${formatDate(allRange.end)})`,
+    },
+  ]
+})
 
 const sortModes: { value: SortMode; label: string }[] = [
-  { value: 'nameAsc', label: 'По названию A-Z' },
-  { value: 'nameDesc', label: 'По названию Z-A' },
   { value: 'timeDesc', label: 'По времени: убывание' },
   { value: 'timeAsc', label: 'По времени: возрастание' },
+  { value: 'nameAsc', label: 'По названию A-Z' },
+  { value: 'nameDesc', label: 'По названию Z-A' },
 ]
 
 const selectedSortLabel = computed(
@@ -34,8 +64,26 @@ const selectedSortLabel = computed(
 )
 
 const selectedTimeLabel = computed(
-  () => timeFilters.find((filter) => filter.value === timeFilter.value)?.label,
+  () =>
+    timeFilters.value.find((filter) => filter.value === timeFilter.value)
+      ?.label,
 )
+
+const allStatsDateRange = computed(() => {
+  return statsDateRange()
+})
+
+const activeTabStat = computed(() => {
+  if (!activeTab.value) return null
+
+  return store.stats[activeTab.value.site] || null
+})
+
+const activeTabTime = computed(() => {
+  if (!activeTabStat.value) return 0
+
+  return timeForFilter(activeTabStat.value.time, activeTabStat.value.daily || {})
+})
 
 const stats = computed(() =>
   Object.entries(store.stats)
@@ -59,10 +107,15 @@ const stats = computed(() =>
 
 onMounted(() => {
   store.load()
+  refreshActiveTab()
+  chrome.tabs.onActivated.addListener(refreshActiveTab)
+  chrome.tabs.onUpdated.addListener(handleTabUpdate)
   window.addEventListener('click', closeMenus)
 })
 
 onBeforeUnmount(() => {
+  chrome.tabs.onActivated.removeListener(refreshActiveTab)
+  chrome.tabs.onUpdated.removeListener(handleTabUpdate)
   window.removeEventListener('click', closeMenus)
 })
 
@@ -96,6 +149,62 @@ function closeMenus(event: MouseEvent) {
   }
 }
 
+async function refreshActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+
+  activeTab.value = tab ? activeTabInfo(tab) : null
+}
+
+function handleTabUpdate(
+  _tabId: number,
+  changeInfo: ActiveTabChangeInfo,
+  tab: chrome.tabs.Tab,
+) {
+  if (!tab.active) return
+  if (!changeInfo.url && !changeInfo.title && !changeInfo.favIconUrl) return
+
+  activeTab.value = activeTabInfo(tab)
+}
+
+function activeTabInfo(tab: chrome.tabs.Tab): ActiveTabInfo {
+  const host = hostFromUrl(tab.url)
+  const site = siteFromUrl(tab.url, host)
+
+  return {
+    title: tab.title || host || 'Новая вкладка',
+    host: host || 'Системная страница',
+    site,
+    favicon:
+      tab.favIconUrl ||
+      (host
+        ? `https://www.google.com/s2/favicons?domain=${host}&sz=64`
+        : 'images/logo.png'),
+  }
+}
+
+function siteFromUrl(url?: string, host = hostFromUrl(url)) {
+  if (!url || !host) return host
+
+  const normalizedUrl = url.toLowerCase()
+  const match = TRACKED_HOSTS.find((trackedHost) =>
+    typeof trackedHost.pattern === 'string'
+      ? normalizedUrl.includes(trackedHost.pattern)
+      : trackedHost.pattern.test(normalizedUrl),
+  )
+
+  return match ? match.name : host
+}
+
+function hostFromUrl(url?: string) {
+  if (!url) return ''
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
 function timeForFilter(totalTime: number, daily: Record<string, number>) {
   if (timeFilter.value === 'all') return totalTime
 
@@ -119,6 +228,28 @@ function dateKeysForFilter(filter: Exclude<TimeFilter, 'all'>) {
   )
 }
 
+function statsDateRangeForFilter(filter: Exclude<TimeFilter, 'all'>) {
+  return statsDateRange(dateKeysForFilter(filter))
+}
+
+function statsDateRange(allowedKeys?: string[]) {
+  const allowed = allowedKeys ? new Set(allowedKeys) : null
+  const dates = Object.values(store.stats)
+    .flatMap((stat) =>
+      Object.entries(stat.daily || {})
+        .filter(([key, time]) => time > 0 && (!allowed || allowed.has(key)))
+        .map(([key]) => key),
+    )
+    .map(dateFromKey)
+    .filter((date): date is Date => Boolean(date))
+    .sort((a, b) => a.getTime() - b.getTime())
+
+  return {
+    start: dates[0] || new Date(),
+    end: dates[dates.length - 1] || new Date(),
+  }
+}
+
 function daysAgo(days: number) {
   const date = new Date()
   date.setDate(date.getDate() - days)
@@ -131,6 +262,20 @@ function localDateKey(date: Date) {
   const day = String(date.getDate()).padStart(2, '0')
 
   return `${year}-${month}-${day}`
+}
+
+function dateFromKey(key: string) {
+  const [year, month, day] = key.split('-').map(Number)
+  if (!year || !month || !day) return null
+
+  return new Date(year, month - 1, day)
+}
+
+function formatDate(date: Date) {
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+
+  return `${day}.${month}.${date.getFullYear()}`
 }
 
 function formattedTime(ms: number): string {
@@ -278,7 +423,68 @@ function formattedTime(ms: number): string {
       </div>
     </div>
 
-    <div class="h-78 overflow-y-auto pr-2 custom-scrollbar">
+    <div
+      class="rounded border border-blue-400/30 bg-blue-500/10 px-3 py-2 shadow-lg shadow-black/20"
+    >
+      <div class="mb-1 text-xs font-semibold uppercase text-blue-300/90">
+        Текущая вкладка
+      </div>
+      <div v-if="activeTab" class="flex items-center gap-2.5">
+        <svg
+          @click="store.toggleFavourite(activeTab.site)"
+          :fill="activeTabStat?.isFavorite ? 'currentColor' : 'none'"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          :class="[
+            'size-6 shrink-0 cursor-pointer transition hover:scale-110',
+            { 'text-amber-300': activeTabStat?.isFavorite },
+          ]"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"
+          />
+        </svg>
+
+        <img :src="activeTab.favicon" class="size-5 shrink-0 rounded" />
+
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-sm font-semibold" :title="activeTab.title">
+            {{ activeTab.title }}
+          </div>
+          <div class="truncate text-xs text-white/60" :title="activeTab.host">
+            {{ activeTab.host }}
+          </div>
+        </div>
+
+        <span
+          class="shrink-0 text-sm font-bold"
+          v-html="formattedTime(activeTabTime)"
+        ></span>
+
+        <svg
+          @click="store.remove(activeTab.site)"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="size-6 shrink-0 cursor-pointer text-red-700 transition hover:scale-130 hover:text-red-500"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 18 18 6M6 6l12 12"
+          />
+        </svg>
+      </div>
+      <div v-else class="text-sm text-white/60">Активная вкладка не найдена</div>
+    </div>
+
+    <div class="h-84 overflow-y-auto pr-2 custom-scrollbar">
       <ul class="flex flex-col gap-4">
         <li
           v-for="{ site, value, filteredTime } in stats"

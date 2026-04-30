@@ -25,8 +25,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 function toggleFavourite(site: string) {
   chrome.storage.local.get('stats', (res: { stats?: Stats }) => {
     const stats = res.stats || {}
-    const prev = stats[site]
-    if (!prev) return
+    const prev = stats[site] || { time: 0, isFavorite: false, daily: {} }
 
     stats[site] = { ...prev, isFavorite: !prev.isFavorite }
     chrome.storage.local.set({ stats })
