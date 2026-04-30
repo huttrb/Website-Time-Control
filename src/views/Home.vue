@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { TimeFilter } from '../types'
 import { useMainStore } from '../stores/main'
-import { TRACKED_HOSTS } from '../stores/tracked'
+import { trackingKeyForUrl } from '../stores/tracked'
 
 const store = useMainStore()
 
-type TimeFilter = 'all' | 'today' | 'yesterday' | 'week' | 'month'
 type SortMode = 'nameAsc' | 'nameDesc' | 'timeDesc' | 'timeAsc'
 
 interface ActiveTabInfo {
@@ -92,7 +92,7 @@ const stats = computed(() =>
       value,
       filteredTime: timeForFilter(value.time, value.daily || {}),
     }))
-    .filter(({ filteredTime }) => filteredTime >= 1000)
+    .filter(({ filteredTime }) => filteredTime >= store.settings.minVisibleTimeMs)
     .sort((a, b) => {
       if (a.value.isFavorite && !b.value.isFavorite) return -1
       if (!a.value.isFavorite && b.value.isFavorite) return 1
@@ -118,6 +118,12 @@ onBeforeUnmount(() => {
   chrome.tabs.onUpdated.removeListener(handleTabUpdate)
   window.removeEventListener('click', closeMenus)
 })
+
+watch(
+  () => store.settings.trackedHosts,
+  () => refreshActiveTab(),
+  { deep: true },
+)
 
 function toggleTimeMenu() {
   isTimeOpen.value = !isTimeOpen.value
@@ -185,14 +191,7 @@ function activeTabInfo(tab: chrome.tabs.Tab): ActiveTabInfo {
 function siteFromUrl(url?: string, host = hostFromUrl(url)) {
   if (!url || !host) return host
 
-  const normalizedUrl = url.toLowerCase()
-  const match = TRACKED_HOSTS.find((trackedHost) =>
-    typeof trackedHost.pattern === 'string'
-      ? normalizedUrl.includes(trackedHost.pattern)
-      : trackedHost.pattern.test(normalizedUrl),
-  )
-
-  return match ? match.name : host
+  return trackingKeyForUrl(url.toLowerCase(), store.settings) || host
 }
 
 function hostFromUrl(url?: string) {

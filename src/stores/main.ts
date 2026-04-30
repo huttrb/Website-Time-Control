@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
-import type { Stats } from '../types'
-import { TRACKED_HOSTS } from './tracked'
+import type { AppSettings, Stats } from '../types'
+import { DEFAULT_SETTINGS, normalizeSettings } from './tracked'
+
+let storageListenerAttached = false
 
 function localDateKey(date = new Date()) {
   const year = date.getFullYear()
@@ -41,13 +43,14 @@ function normalizeStats(stats: Stats) {
 export const useMainStore = defineStore('main', {
   state: () => ({
     stats: {} as Stats,
+    settings: DEFAULT_SETTINGS as AppSettings,
     loaded: false,
   }),
 
   getters: {
     sortedStats(state): Stats {
       return Object.entries(state.stats)
-        .filter(([_, v]) => v.time >= 1000)
+        .filter(([_, v]) => v.time >= state.settings.minVisibleTimeMs)
         .sort(([_a, a], [_b, b]) => {
           if (a.isFavorite && !b.isFavorite) return -1
           if (!a.isFavorite && b.isFavorite) return 1
@@ -62,6 +65,10 @@ export const useMainStore = defineStore('main', {
 
   actions: {
     load() {
+      chrome.storage.local.get('settings', (res: { settings?: AppSettings }) => {
+        this.settings = normalizeSettings(res.settings)
+      })
+
       chrome.storage.local.get('stats', (res: { stats?: Stats }) => {
         const { stats, changed } = normalizeStats(res.stats ?? {})
 
@@ -73,8 +80,19 @@ export const useMainStore = defineStore('main', {
         }
       })
 
+      if (storageListenerAttached) return
+      storageListenerAttached = true
+
       chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && changes.stats) {
+        if (area !== 'local') return
+
+        if (changes.settings) {
+          this.settings = normalizeSettings(
+            changes.settings.newValue as AppSettings | undefined,
+          )
+        }
+
+        if (changes.stats) {
           const { stats, changed } = normalizeStats(
             (changes.stats.newValue ?? {}) as Stats,
           )
@@ -100,9 +118,13 @@ export const useMainStore = defineStore('main', {
       chrome.runtime.sendMessage({ type: 'clearStats' })
     },
 
+    saveSettings(settings: AppSettings) {
+      chrome.storage.local.set({ settings: normalizeSettings(settings) })
+    },
+
     hostDomain(key: string) {
-      const match = TRACKED_HOSTS.find((host) => host.name === key)
-      return match ? match.domain : key // для обычных сайтов key уже домен
+      const match = this.settings.trackedHosts.find((host) => host.name === key)
+      return match ? match.domain : key
     },
   },
 })

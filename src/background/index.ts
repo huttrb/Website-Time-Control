@@ -1,9 +1,25 @@
-import type { Stats } from '../types'
-import { TRACKED_HOSTS } from '../stores/tracked'
+import type { AppSettings, Stats } from '../types'
+import {
+  DEFAULT_SETTINGS,
+  normalizeSettings,
+  trackingKeyForUrl,
+} from '../stores/tracked'
 
 let activeHost: string | null = null
 let startTime = 0
 let intervalId: number | null = null
+let settings: AppSettings = DEFAULT_SETTINGS
+
+chrome.storage.local.get('settings', (res: { settings?: AppSettings }) => {
+  settings = normalizeSettings(res.settings)
+})
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.settings) {
+    settings = normalizeSettings(changes.settings.newValue as AppSettings)
+    refreshCurrentTabTracking()
+  }
+})
 
 chrome.tabs.onActivated.addListener(({ tabId }) => {
   handleTabChange(tabId)
@@ -44,10 +60,6 @@ function clearStats() {
   chrome.storage.local.set({ stats: {} })
 }
 
-function normalizeHost(host: string) {
-  return host.replace(/^www\./, '')
-}
-
 function startTrackingInterval() {
   if (intervalId) clearInterval(intervalId)
   intervalId = setInterval(() => {
@@ -65,20 +77,21 @@ async function handleTabChange(tabId: number) {
   if (!tab.url || tab.url.startsWith('chrome://')) return
 
   const url = tab.url.toLowerCase()
-  const host = normalizeHost(new URL(tab.url).hostname)
-
-  // ищем первый подходящий паттерн
-  const match = TRACKED_HOSTS.find((h) =>
-    typeof h.pattern === 'string'
-      ? url.includes(h.pattern)
-      : h.pattern.test(url),
-  )
-
-  // Если нет специального совпадения - просто используем normalized host
-  activeHost = match ? match.name : host
+  activeHost = trackingKeyForUrl(url, settings)
+  if (!activeHost) return
 
   startTime = Date.now()
   startTrackingInterval()
+}
+
+async function refreshCurrentTabTracking() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id) {
+    stopTracking()
+    return
+  }
+
+  handleTabChange(tab.id)
 }
 
 function stopTracking() {
