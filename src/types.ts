@@ -6,7 +6,13 @@ interface SiteStat {
 
 export type Stats = Record<string, SiteStat>
 
-export type TimeFilter = 'all' | 'today' | 'yesterday' | 'week' | 'month'
+export type TimeFilter =
+  | 'all'
+  | 'today'
+  | 'yesterday'
+  | 'week'
+  | 'month'
+  | 'custom'
 
 export interface TrackedHost {
   name: string

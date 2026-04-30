@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
+import { ru } from 'date-fns/locale'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { TimeFilter } from '../types'
 import { useMainStore } from '../stores/main'
@@ -28,6 +31,10 @@ const isSortOpen = ref(false)
 const timeMenu = ref<HTMLElement | null>(null)
 const sortMenu = ref<HTMLElement | null>(null)
 const activeTab = ref<ActiveTabInfo | null>(null)
+const customStartKey = ref<string | null>(null)
+const customEndKey = ref<string | null>(null)
+const draftDateRange = ref<Date[] | null>(null)
+const isCalendarOpen = ref(false)
 
 const timeFilters = computed<{ value: TimeFilter; label: string }[]>(() => {
   const weekRange = statsDateRangeForFilter('week')
@@ -49,6 +56,7 @@ const timeFilters = computed<{ value: TimeFilter; label: string }[]>(() => {
       value: 'all',
       label: `Всего (${formatDate(allRange.start)} - ${formatDate(allRange.end)})`,
     },
+    { value: 'custom', label: customDateLabel.value },
   ]
 })
 
@@ -69,9 +77,54 @@ const selectedTimeLabel = computed(
       ?.label,
 )
 
+const customDateLabel = computed(() => {
+  if (customStartKey.value && customEndKey.value) {
+    const start = dateFromKey(customStartKey.value)
+    const end = dateFromKey(customEndKey.value)
+
+    if (start && end) return `Выбрано (${formatDate(start)} - ${formatDate(end)})`
+  }
+
+  if (customStartKey.value) {
+    const start = dateFromKey(customStartKey.value)
+    if (start) return `Выберите конец (${formatDate(start)})`
+  }
+
+  return 'Выбрать даты'
+})
+
+const draftDateLabel = computed(() => {
+  if (draftDateRange.value?.[0] && draftDateRange.value?.[1]) {
+    return `${formatDate(draftDateRange.value[0])} - ${formatDate(draftDateRange.value[1])}`
+  }
+
+  if (draftDateRange.value?.[0]) {
+    return `Начало: ${formatDate(draftDateRange.value[0])}`
+  }
+
+  return 'Выберите начало диапазона'
+})
+
 const allStatsDateRange = computed(() => {
   return statsDateRange()
 })
+
+const availableDateKeys = computed(
+  () =>
+    new Set(
+      Object.values(store.stats).flatMap((stat) =>
+        Object.entries(stat.daily || {})
+          .filter(([_, time]) => time > 0)
+          .map(([key]) => key),
+      ),
+    ),
+)
+
+const availableDates = computed(() =>
+  Array.from(availableDateKeys.value)
+    .map(dateFromKey)
+    .filter((date): date is Date => Boolean(date)),
+)
 
 const activeTabStat = computed(() => {
   if (!activeTab.value) return null
@@ -136,7 +189,22 @@ function toggleSortMenu() {
 }
 
 function selectTimeFilter(filter: TimeFilter) {
+  if (filter === 'custom') {
+    openCalendar()
+    return
+  }
+
   timeFilter.value = filter
+  isCalendarOpen.value = false
+  isTimeOpen.value = false
+}
+
+function openCalendar() {
+  const start = customStartKey.value ? dateFromKey(customStartKey.value) : null
+  const end = customEndKey.value ? dateFromKey(customEndKey.value) : null
+
+  draftDateRange.value = start && end ? [start, end] : null
+  isCalendarOpen.value = true
   isTimeOpen.value = false
 }
 
@@ -206,6 +274,9 @@ function hostFromUrl(url?: string) {
 
 function timeForFilter(totalTime: number, daily: Record<string, number>) {
   if (timeFilter.value === 'all') return totalTime
+  if (timeFilter.value === 'custom') {
+    return customDateKeys().reduce((sum, key) => sum + (daily[key] || 0), 0)
+  }
 
   return dateKeysForFilter(timeFilter.value).reduce(
     (sum, key) => sum + (daily[key] || 0),
@@ -213,7 +284,7 @@ function timeForFilter(totalTime: number, daily: Record<string, number>) {
   )
 }
 
-function dateKeysForFilter(filter: Exclude<TimeFilter, 'all'>) {
+function dateKeysForFilter(filter: Exclude<TimeFilter, 'all' | 'custom'>) {
   const daysByFilter = {
     today: 1,
     yesterday: 1,
@@ -227,7 +298,7 @@ function dateKeysForFilter(filter: Exclude<TimeFilter, 'all'>) {
   )
 }
 
-function statsDateRangeForFilter(filter: Exclude<TimeFilter, 'all'>) {
+function statsDateRangeForFilter(filter: Exclude<TimeFilter, 'all' | 'custom'>) {
   return statsDateRange(dateKeysForFilter(filter))
 }
 
@@ -247,6 +318,40 @@ function statsDateRange(allowedKeys?: string[]) {
     start: dates[0] || new Date(),
     end: dates[dates.length - 1] || new Date(),
   }
+}
+
+function applyCustomDateRange() {
+  const [start, end] = draftDateRange.value || []
+  if (!start || !end) return
+
+  customStartKey.value = localDateKey(start)
+  customEndKey.value = localDateKey(end)
+  timeFilter.value = 'custom'
+  isCalendarOpen.value = false
+}
+
+function closeCalendar() {
+  isCalendarOpen.value = false
+}
+
+function handleDateRangeUpdate(value: unknown) {
+  draftDateRange.value = Array.isArray(value) ? value : null
+
+  const [start, end] = draftDateRange.value || []
+  if (start instanceof Date && end instanceof Date) {
+    applyCustomDateRange()
+  }
+}
+
+function customDateKeys() {
+  if (!customStartKey.value) return []
+
+  const start = customStartKey.value
+  const end = customEndKey.value || customStartKey.value
+
+  return Array.from(availableDateKeys.value).filter(
+    (key) => key >= start && key <= end,
+  )
 }
 
 function daysAgo(days: number) {
@@ -325,7 +430,7 @@ function formattedTime(ms: number): string {
 
         <div
           v-if="isTimeOpen"
-          class="absolute left-0 top-12 z-20 w-full overflow-hidden rounded-lg border border-white/10 bg-zinc-900/95 shadow-2xl shadow-black/40 backdrop-blur"
+          class="absolute left-0 top-12 z-20 w-full overflow-visible rounded-lg border border-white/10 bg-zinc-900/95 shadow-2xl shadow-black/40 backdrop-blur"
           @click.stop
         >
           <button
@@ -357,6 +462,7 @@ function formattedTime(ms: number): string {
               />
             </svg>
           </button>
+
         </div>
       </div>
 
@@ -419,6 +525,67 @@ function formattedTime(ms: number): string {
             </svg>
           </button>
         </div>
+      </div>
+    </div>
+
+    <div
+      v-if="isCalendarOpen"
+      class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
+      @click.self="closeCalendar"
+    >
+      <div
+        class="w-full max-w-[370px] rounded-lg border border-white/10 bg-zinc-900 p-3 shadow-2xl shadow-black/60"
+        @click.stop
+      >
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-sm font-semibold text-white">Выбор дат</div>
+            <div class="truncate text-xs text-white/50">{{ draftDateLabel }}</div>
+          </div>
+
+          <button
+            type="button"
+            class="grid size-8 shrink-0 place-items-center rounded text-white/60 transition hover:bg-white/10 hover:text-white"
+            title="Закрыть"
+            @click="closeCalendar"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="size-5"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M6 18 18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <VueDatePicker
+          :model-value="draftDateRange"
+          inline
+          dark
+          range
+          auto-apply
+          :time-picker="false"
+          :locale="ru"
+          :week-start="1"
+          :enable-time-picker="false"
+          :allowed-dates="availableDates"
+          :clearable="false"
+          :action-row="{
+            showSelect: false,
+            showCancel: false,
+            showNow: false,
+            showPreview: false,
+          }"
+          @update:model-value="handleDateRangeUpdate"
+        />
       </div>
     </div>
 
@@ -542,6 +709,20 @@ function formattedTime(ms: number): string {
 </template>
 
 <style scoped>
+:deep(.dp__action_row) {
+  display: none;
+}
+
+:deep(.dp__button_bottom),
+:deep(.dp__button[aria-label*='time' i]) {
+  display: none;
+}
+
+:deep(.dp__menu) {
+  width: 100%;
+  min-width: 0;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 2px;
 }
