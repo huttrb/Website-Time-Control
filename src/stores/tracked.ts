@@ -23,7 +23,7 @@ export function normalizeSettings(settings?: Partial<AppSettings>): AppSettings 
     trackedHosts: trackedHosts.map((host) => ({
       name: host.name || host.domain || host.pattern || 'site',
       domain: normalizeDomain(host.domain),
-      pattern: host.pattern || host.domain || '',
+      pattern: normalizePattern(host.pattern || host.domain || ''),
       enabled: host.enabled !== false,
     })),
     minVisibleTimeMs:
@@ -38,7 +38,7 @@ export function findTrackedHost(url: string, hosts: TrackedHost[]) {
   const hostname = hostFromUrl(url)
   const normalizedHosts = hosts.map((host) => ({
     ...host,
-    pattern: host.pattern.trim().toLowerCase(),
+    pattern: normalizePattern(host.pattern),
     domain: normalizeDomain(host.domain),
   }))
 
@@ -61,11 +61,42 @@ export function trackingKeyForUrl(url: string, settings: AppSettings) {
 
   if (settings.trackMode === 'selected' && !match) return null
 
-  return match?.name || hostFromUrl(url)
+  return match ? trackedHostKey(match) : hostFromUrl(url)
+}
+
+export function trackedHostKey(host: TrackedHost) {
+  const domain = normalizeDomain(host.domain)
+  const pattern = normalizePattern(host.pattern || domain)
+
+  return `tracked:${domain || 'any'}:${pattern || 'site'}`
+}
+
+export function trackedHostLabel(key: string, settings: AppSettings) {
+  const match = findTrackedHostByKey(key, settings.trackedHosts)
+
+  return match?.name || key
+}
+
+export function trackedHostDomain(key: string, settings: AppSettings) {
+  const match = findTrackedHostByKey(key, settings.trackedHosts)
+
+  if (match?.domain) return match.domain
+  if (!key.startsWith('tracked:')) return key
+
+  const [, domain] = key.split(':')
+  return domain === 'any' ? key : domain
+}
+
+function findTrackedHostByKey(key: string, hosts: TrackedHost[]) {
+  return hosts.find((host) => trackedHostKey(host) === key)
 }
 
 export function normalizeDomain(domain: string) {
   return domain.trim().toLowerCase().replace(/^www\./, '')
+}
+
+function normalizePattern(pattern: string) {
+  return pattern.trim().toLowerCase()
 }
 
 function hostFromUrl(url: string) {

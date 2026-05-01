@@ -142,6 +142,7 @@ const stats = computed(() =>
   Object.entries(store.stats)
     .map(([site, value]) => ({
       site,
+      label: store.siteLabel(site),
       value,
       filteredTime: timeForFilter(value.time, value.daily || {}),
     }))
@@ -150,9 +151,9 @@ const stats = computed(() =>
       if (a.value.isFavorite && !b.value.isFavorite) return -1
       if (!a.value.isFavorite && b.value.isFavorite) return 1
       if (sortMode.value === 'nameAsc')
-        return a.site.localeCompare(b.site, undefined, { sensitivity: 'base' })
+        return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
       if (sortMode.value === 'nameDesc')
-        return b.site.localeCompare(a.site, undefined, { sensitivity: 'base' })
+        return b.label.localeCompare(a.label, undefined, { sensitivity: 'base' })
       if (sortMode.value === 'timeAsc') return a.filteredTime - b.filteredTime
       return b.filteredTime - a.filteredTime
     }),
@@ -653,7 +654,7 @@ function formattedTime(ms: number): string {
     <div class="h-83 overflow-y-auto pr-2 custom-scrollbar">
       <ul class="flex flex-col gap-4">
         <li
-          v-for="{ site, value, filteredTime } in stats"
+          v-for="{ site, label, value, filteredTime } in stats"
           :key="site"
           class="text-base flex justify-between items-center gap-2.5"
         >
@@ -682,7 +683,7 @@ function formattedTime(ms: number): string {
                 class="w-5 h-5 rounded"
               />
               <span class="font-semibold truncate max-w-37.5" :title="site">
-                {{ site }}
+                {{ label }}
               </span>
             </div>
             <span class="font-bold" v-html="formattedTime(filteredTime)"></span>
