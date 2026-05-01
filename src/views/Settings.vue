@@ -8,7 +8,18 @@ import { normalizeDomain, normalizeSettings } from '../stores/tracked'
 const router = useRouter()
 const store = useMainStore()
 
-const draft = ref<AppSettings>(cloneSettings(store.settings))
+interface DraftTrackedHost extends TrackedHost {
+  draftId: string
+}
+
+type DraftSettings = Omit<AppSettings, 'trackedHosts'> & {
+  trackedHosts: DraftTrackedHost[]
+}
+
+let draftHostId = 0
+
+const draft = ref<DraftSettings>(cloneSettings(store.settings))
+const animateTrackedList = ref(false)
 const minVisibleSeconds = computed({
   get: () => Math.round(draft.value.minVisibleTimeMs / 1000),
   set: (value: number) => {
@@ -20,16 +31,22 @@ onMounted(() => {
   store.load()
   chrome.storage.local.get('settings', (res: { settings?: AppSettings }) => {
     draft.value = cloneSettings(normalizeSettings(res.settings))
+
+    requestAnimationFrame(() => {
+      animateTrackedList.value = true
+    })
   })
 })
 
 function addTrackedHost() {
-  draft.value.trackedHosts.push({
-    name: '',
-    domain: '',
-    pattern: '',
-    enabled: true,
-  })
+  draft.value.trackedHosts.push(
+    createDraftHost({
+      name: '',
+      domain: '',
+      pattern: '',
+      enabled: true,
+    }),
+  )
 }
 
 function removeTrackedHost(index: number) {
@@ -65,16 +82,23 @@ function cleanTrackedHost(host: TrackedHost): TrackedHost {
   }
 }
 
-function cloneSettings(settings: AppSettings): AppSettings {
+function createDraftHost(host: TrackedHost): DraftTrackedHost {
+  return {
+    ...host,
+    draftId: `tracked-host-${draftHostId++}`,
+  }
+}
+
+function cloneSettings(settings: AppSettings): DraftSettings {
   return {
     ...settings,
-    trackedHosts: settings.trackedHosts.map((host) => ({ ...host })),
+    trackedHosts: settings.trackedHosts.map(createDraftHost),
   }
 }
 </script>
 
 <template>
-  <div class="flex h-[500px] flex-col gap-3">
+  <div class="flex h-[462px] flex-col gap-3">
     <div class="flex items-center justify-between gap-2">
       <button
         type="button"
@@ -121,7 +145,7 @@ function cloneSettings(settings: AppSettings): AppSettings {
       </button>
     </div>
 
-    <div class="custom-scrollbar flex-1 overflow-y-auto pr-2">
+    <div class="custom-scrollbar flex-1 overflow-x-hidden overflow-y-auto pr-2">
       <div class="flex flex-col gap-4">
         <section class="flex flex-col gap-2">
           <h2 class="text-sm font-semibold uppercase text-blue-300/90">
@@ -186,9 +210,14 @@ function cloneSettings(settings: AppSettings): AppSettings {
             </button>
           </div>
 
+          <TransitionGroup
+            tag="div"
+            :name="animateTrackedList ? 'tracked-list' : undefined"
+            class="tracked-list relative flex flex-col gap-2"
+          >
           <div
             v-for="(host, index) in draft.trackedHosts"
-            :key="index"
+            :key="host.draftId"
             class="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 rounded border border-white/10 bg-zinc-900/70 p-2"
           >
             <input
@@ -237,6 +266,7 @@ function cloneSettings(settings: AppSettings): AppSettings {
               </svg>
             </button>
           </div>
+          </TransitionGroup>
         </section>
 
         <button
@@ -252,6 +282,32 @@ function cloneSettings(settings: AppSettings): AppSettings {
 </template>
 
 <style scoped>
+.tracked-list-move,
+.tracked-list-enter-active,
+.tracked-list-leave-active {
+  transition:
+    opacity 160ms ease,
+    transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tracked-list-leave-active {
+  pointer-events: none;
+}
+
+.tracked-list-enter-from,
+.tracked-list-leave-to {
+  opacity: 0;
+  transform: scale(0.99);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tracked-list-move,
+  .tracked-list-enter-active,
+  .tracked-list-leave-active {
+    transition: none;
+  }
+}
+
 .no-spinner::-webkit-outer-spin-button,
 .no-spinner::-webkit-inner-spin-button {
   margin: 0;

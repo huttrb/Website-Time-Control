@@ -429,42 +429,44 @@ function formattedTime(ms: number): string {
           </svg>
         </button>
 
-        <div
-          v-if="isTimeOpen"
-          class="absolute left-0 top-12 z-20 w-full overflow-visible rounded-lg border border-white/10 bg-zinc-900/95 shadow-2xl shadow-black/40 backdrop-blur"
-          @click.stop
-        >
-          <button
-            v-for="filter in timeFilters"
-            :key="filter.value"
-            type="button"
-            class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-white/10"
-            :class="
-              timeFilter === filter.value
-                ? 'text-blue-300 bg-blue-500/10'
-                : 'text-white'
-            "
-            @click="selectTimeFilter(filter.value)"
+        <Transition name="menu-pop">
+          <div
+            v-if="isTimeOpen"
+            class="absolute left-0 top-12 z-20 w-full overflow-visible rounded-lg border border-white/10 bg-zinc-900/95 shadow-2xl shadow-black/40 backdrop-blur"
+            @click.stop
           >
-            <span class="truncate">{{ filter.label }}</span>
-            <svg
-              v-if="timeFilter === filter.value"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="1.5"
-              stroke="currentColor"
-              class="size-4 shrink-0"
+            <button
+              v-for="filter in timeFilters"
+              :key="filter.value"
+              type="button"
+              class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-white/10"
+              :class="
+                timeFilter === filter.value
+                  ? 'text-blue-300 bg-blue-500/10'
+                  : 'text-white'
+              "
+              @click="selectTimeFilter(filter.value)"
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="m4.5 12.75 6 6 9-13.5"
-              />
-            </svg>
-          </button>
+              <span class="truncate">{{ filter.label }}</span>
+              <svg
+                v-if="timeFilter === filter.value"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="size-4 shrink-0"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="m4.5 12.75 6 6 9-13.5"
+                />
+              </svg>
+            </button>
 
-        </div>
+          </div>
+        </Transition>
       </div>
 
       <div ref="sortMenu" class="relative">
@@ -491,53 +493,56 @@ function formattedTime(ms: number): string {
           </svg>
         </button>
 
-        <div
-          v-if="isSortOpen"
-          class="absolute right-0 top-12 z-20 w-61 overflow-hidden rounded-lg border border-white/10 bg-zinc-900/95 shadow-2xl shadow-black/40 backdrop-blur"
-          @click.stop
-        >
-          <button
-            v-for="sort in sortModes"
-            :key="sort.value"
-            type="button"
-            class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-white/10"
-            :class="
-              sortMode === sort.value
-                ? 'text-blue-300 bg-blue-500/10'
-                : 'text-white'
-            "
-            @click="selectSortMode(sort.value)"
+        <Transition name="menu-pop">
+          <div
+            v-if="isSortOpen"
+            class="absolute right-0 top-12 z-20 w-61 overflow-hidden rounded-lg border border-white/10 bg-zinc-900/95 shadow-2xl shadow-black/40 backdrop-blur"
+            @click.stop
           >
-            <span class="truncate">{{ sort.label }}</span>
-            <svg
-              v-if="sortMode === sort.value"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="1.5"
-              stroke="currentColor"
-              class="size-4 shrink-0"
+            <button
+              v-for="sort in sortModes"
+              :key="sort.value"
+              type="button"
+              class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-white/10"
+              :class="
+                sortMode === sort.value
+                  ? 'text-blue-300 bg-blue-500/10'
+                  : 'text-white'
+              "
+              @click="selectSortMode(sort.value)"
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="m4.5 12.75 6 6 9-13.5"
-              />
-            </svg>
-          </button>
-        </div>
+              <span class="truncate">{{ sort.label }}</span>
+              <svg
+                v-if="sortMode === sort.value"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="size-4 shrink-0"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="m4.5 12.75 6 6 9-13.5"
+                />
+              </svg>
+            </button>
+          </div>
+        </Transition>
       </div>
     </div>
 
-    <div
-      v-if="isCalendarOpen"
-      class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
-      @click.self="closeCalendar"
-    >
+    <Transition name="modal-fade">
       <div
-        class="w-full max-w-[370px] rounded-lg border border-white/10 bg-zinc-900 p-3 shadow-2xl shadow-black/60"
-        @click.stop
+        v-if="isCalendarOpen"
+        class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
+        @click.self="closeCalendar"
       >
+        <div
+          class="calendar-panel w-full max-w-[370px] rounded-lg border border-white/10 bg-zinc-900 p-3 shadow-2xl shadow-black/60"
+          @click.stop
+        >
         <div class="mb-3 flex items-center justify-between gap-3">
           <div class="min-w-0">
             <div class="text-sm font-semibold text-white">Выбор дат</div>
@@ -587,8 +592,9 @@ function formattedTime(ms: number): string {
           }"
           @update:model-value="handleDateRangeUpdate"
         />
+        </div>
       </div>
-    </div>
+    </Transition>
 
     <div
       class="rounded border border-blue-400/30 bg-blue-500/10 px-3 py-2 shadow-lg shadow-black/20"
@@ -596,7 +602,12 @@ function formattedTime(ms: number): string {
       <div class="mb-1 text-xs font-semibold uppercase text-blue-300/90">
         Текущая вкладка
       </div>
-      <div v-if="activeTab" class="flex items-center gap-2.5">
+      <div class="min-h-10">
+      <div
+        v-if="activeTab"
+        :key="activeTab.site"
+        class="flex min-h-10 items-center gap-2.5"
+      >
         <svg
           @click="store.toggleFavourite(activeTab.site)"
           :fill="activeTabStat?.isFavorite ? 'currentColor' : 'none'"
@@ -605,8 +616,8 @@ function formattedTime(ms: number): string {
           stroke-width="1.5"
           stroke="currentColor"
           :class="[
-            'size-6 shrink-0 cursor-pointer transition hover:scale-110',
-            { 'text-amber-300': activeTabStat?.isFavorite },
+            'favorite-star size-6 shrink-0 cursor-pointer transition hover:scale-110',
+            { 'is-favorite text-amber-300': activeTabStat?.isFavorite },
           ]"
         >
           <path
@@ -648,11 +659,22 @@ function formattedTime(ms: number): string {
           />
         </svg>
       </div>
-      <div v-else class="text-sm text-white/60">Активная вкладка не найдена</div>
+      <div
+        v-else
+        key="empty-tab"
+        class="flex min-h-10 items-center text-sm text-white/60"
+      >
+        Активная вкладка не найдена
+      </div>
+      </div>
     </div>
 
-    <div class="h-83 overflow-y-auto pr-2 custom-scrollbar">
-      <ul class="flex flex-col gap-4">
+    <div class="h-82 overflow-x-hidden overflow-y-auto pr-2 custom-scrollbar">
+      <TransitionGroup
+        tag="ul"
+        name="stat-list"
+        class="stat-list relative flex flex-col gap-4"
+      >
         <li
           v-for="{ site, label, value, filteredTime } in stats"
           :key="site"
@@ -668,8 +690,8 @@ function formattedTime(ms: number): string {
                 stroke-width="1.5"
                 stroke="currentColor"
                 :class="[
-                  'size-6 cursor-pointer',
-                  { 'text-amber-300': value.isFavorite },
+                  'favorite-star size-6 cursor-pointer transition hover:scale-110',
+                  { 'is-favorite text-amber-300': value.isFavorite },
                 ]"
               >
                 <path
@@ -704,12 +726,109 @@ function formattedTime(ms: number): string {
             />
           </svg>
         </li>
-      </ul>
+      </TransitionGroup>
     </div>
   </div>
 </template>
 
 <style scoped>
+.menu-pop-enter-active,
+.menu-pop-leave-active {
+  transform-origin: top right;
+  transition:
+    opacity 150ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.menu-pop-enter-from,
+.menu-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.96);
+}
+
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 170ms ease;
+}
+
+.modal-fade-enter-active .calendar-panel,
+.modal-fade-leave-active .calendar-panel {
+  transition:
+    opacity 170ms ease,
+    transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-from .calendar-panel,
+.modal-fade-leave-to .calendar-panel {
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
+}
+
+.stat-list-move,
+.stat-list-enter-active,
+.stat-list-leave-active {
+  transition:
+    opacity 160ms ease,
+    transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.stat-list-leave-active {
+  pointer-events: none;
+}
+
+.stat-list-enter-from,
+.stat-list-leave-to {
+  opacity: 0;
+  transform: scale(0.99);
+}
+
+.favorite-star {
+  transform-origin: center;
+  transition:
+    color 160ms ease,
+    fill 160ms ease,
+    transform 160ms ease;
+}
+
+.favorite-star.is-favorite {
+  animation: favorite-pop 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes favorite-pop {
+  0% {
+    transform: scale(1);
+  }
+
+  55% {
+    transform: scale(1.22) rotate(-8deg);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-pop-enter-active,
+  .menu-pop-leave-active,
+  .modal-fade-enter-active,
+  .modal-fade-leave-active,
+  .modal-fade-enter-active .calendar-panel,
+  .modal-fade-leave-active .calendar-panel,
+  .stat-list-move,
+  .stat-list-enter-active,
+  .stat-list-leave-active,
+  .favorite-star {
+    transition: none;
+    animation: none;
+  }
+}
+
 :deep(.dp__action_row) {
   display: none;
 }
