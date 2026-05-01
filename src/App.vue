@@ -1,7 +1,16 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { translate } from './i18n'
+import { useMainStore } from './stores/main'
 
 const route = useRoute()
+const store = useMainStore()
+const t = computed(() => translate.bind(null, store.settings.language))
+
+onMounted(() => {
+  store.load()
+})
 </script>
 
 <template>
@@ -12,7 +21,7 @@ const route = useRoute()
       v-if="route.path !== '/settings'"
       to="/settings"
       class="absolute right-4 top-4 grid size-9 place-items-center rounded-full bg-blue-950 text-white shadow-lg shadow-black/20 transition hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500/70"
-      title="Настройки"
+      :title="t('settings')"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

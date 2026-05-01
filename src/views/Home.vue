@@ -2,9 +2,10 @@
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import type { Marker } from '@vuepic/vue-datepicker'
-import { ru } from 'date-fns/locale'
+import { enUS, ru } from 'date-fns/locale'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { TimeFilter } from '../types'
+import { translate } from '../i18n'
 import { useMainStore } from '../stores/main'
 import { trackingKeyForUrl } from '../stores/tracked'
 
@@ -38,6 +39,10 @@ const draftDateRange = ref<Date[] | null>(null)
 const isCalendarOpen = ref(false)
 const animateStatsList = ref(false)
 let statsAnimationTimeout: number | null = null
+const t = computed(() => translate.bind(null, store.settings.language))
+const calendarLocale = computed(() =>
+  store.settings.language === 'ru' ? ru : enUS,
+)
 
 const timeFilters = computed<{ value: TimeFilter; label: string }[]>(() => {
   const weekRange = statsDateRangeForFilter('week')
@@ -45,33 +50,33 @@ const timeFilters = computed<{ value: TimeFilter; label: string }[]>(() => {
   const allRange = allStatsDateRange.value
 
   return [
-    { value: 'today', label: 'Сегодня' },
-    { value: 'yesterday', label: 'Вчера' },
+    { value: 'today', label: t.value('today') },
+    { value: 'yesterday', label: t.value('yesterday') },
     {
       value: 'week',
-      label: `Неделя (${formatDate(weekRange.start)} - ${formatDate(weekRange.end)})`,
+      label: `${t.value('week')} (${formatDate(weekRange.start)} - ${formatDate(weekRange.end)})`,
     },
     {
       value: 'month',
-      label: `Месяц (${formatDate(monthRange.start)} - ${formatDate(monthRange.end)})`,
+      label: `${t.value('month')} (${formatDate(monthRange.start)} - ${formatDate(monthRange.end)})`,
     },
     {
       value: 'all',
-      label: `Всего (${formatDate(allRange.start)} - ${formatDate(allRange.end)})`,
+      label: `${t.value('all')} (${formatDate(allRange.start)} - ${formatDate(allRange.end)})`,
     },
     { value: 'custom', label: customDateLabel.value },
   ]
 })
 
-const sortModes: { value: SortMode; label: string }[] = [
-  { value: 'timeDesc', label: 'По времени: убывание' },
-  { value: 'timeAsc', label: 'По времени: возрастание' },
-  { value: 'nameAsc', label: 'По названию A-Z' },
-  { value: 'nameDesc', label: 'По названию Z-A' },
-]
+const sortModes = computed<{ value: SortMode; label: string }[]>(() => [
+  { value: 'timeDesc', label: t.value('timeDesc') },
+  { value: 'timeAsc', label: t.value('timeAsc') },
+  { value: 'nameAsc', label: t.value('nameAsc') },
+  { value: 'nameDesc', label: t.value('nameDesc') },
+])
 
 const selectedSortLabel = computed(
-  () => sortModes.find((sort) => sort.value === sortMode.value)?.label,
+  () => sortModes.value.find((sort) => sort.value === sortMode.value)?.label,
 )
 
 const selectedTimeLabel = computed(
@@ -86,15 +91,15 @@ const customDateLabel = computed(() => {
     const end = dateFromKey(customEndKey.value)
 
     if (start && end)
-      return `Выбрано (${formatDate(start)} - ${formatDate(end)})`
+      return `${t.value('selectedRange')} (${formatDate(start)} - ${formatDate(end)})`
   }
 
   if (customStartKey.value) {
     const start = dateFromKey(customStartKey.value)
-    if (start) return `Выберите конец (${formatDate(start)})`
+    if (start) return `${t.value('chooseEnd')} (${formatDate(start)})`
   }
 
-  return 'Выбрать даты'
+  return t.value('chooseDates')
 })
 
 const draftDateLabel = computed(() => {
@@ -103,10 +108,10 @@ const draftDateLabel = computed(() => {
   }
 
   if (draftDateRange.value?.[0]) {
-    return `Начало: ${formatDate(draftDateRange.value[0])}`
+    return `${t.value('rangeStart')}: ${formatDate(draftDateRange.value[0])}`
   }
 
-  return 'Выберите начало диапазона'
+  return t.value('chooseRangeStart')
 })
 
 const allStatsDateRange = computed(() => {
@@ -135,7 +140,7 @@ const availableDateMarkers = computed<Marker[]>(() =>
     date,
     type: 'dot',
     color: '#38bdf8',
-    tooltip: [{ text: 'Есть статистика' }],
+    tooltip: [{ text: t.value('hasStats') }],
   })),
 )
 
@@ -317,8 +322,8 @@ function activeTabInfo(tab: chrome.tabs.Tab): ActiveTabInfo {
   const site = siteFromUrl(tab.url, host)
 
   return {
-    title: tab.title || host || 'Новая вкладка',
-    host: host || 'Системная страница',
+    title: tab.title || host || t.value('newTab'),
+    host: host || t.value('systemPage'),
     site,
     favicon:
       tab.favIconUrl ||
@@ -618,7 +623,9 @@ function formattedTime(ms: number): string {
         >
           <div class="mb-3 flex items-center justify-between gap-3">
             <div class="min-w-0">
-              <div class="text-sm font-semibold text-white">Выбор дат</div>
+              <div class="text-sm font-semibold text-white">
+                {{ t('dateSelection') }}
+              </div>
               <div class="truncate text-xs text-white/50">
                 {{ draftDateLabel }}
               </div>
@@ -627,7 +634,7 @@ function formattedTime(ms: number): string {
             <button
               type="button"
               class="grid size-8 shrink-0 place-items-center rounded text-white/60 transition hover:bg-white/10 hover:text-white"
-              title="Закрыть"
+              :title="t('close')"
               @click="closeCalendar"
             >
               <svg
@@ -654,7 +661,7 @@ function formattedTime(ms: number): string {
             range
             auto-apply
             :time-picker="false"
-            :locale="ru"
+            :locale="calendarLocale"
             :week-start="1"
             :enable-time-picker="false"
             :allowed-dates="availableDates"
@@ -677,7 +684,7 @@ function formattedTime(ms: number): string {
       class="rounded border border-blue-400/30 bg-blue-500/10 px-3 py-2 shadow-lg shadow-black/20"
     >
       <div class="mb-1 text-xs font-semibold uppercase text-blue-300/90">
-        Текущая вкладка
+        {{ t('currentTab') }}
       </div>
       <div class="min-h-10">
         <div v-if="activeTab" class="flex min-h-10 items-center gap-2.5">
@@ -740,7 +747,7 @@ function formattedTime(ms: number): string {
           key="empty-tab"
           class="flex min-h-10 items-center text-sm text-white/60"
         >
-          Активная вкладка не найдена
+          {{ t('activeTabNotFound') }}
         </div>
       </div>
     </div>

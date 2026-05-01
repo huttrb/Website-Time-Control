@@ -7,6 +7,7 @@ export const DEFAULT_TRACKED_HOSTS: TrackedHost[] = [
 ]
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  language: 'ru',
   trackMode: 'all',
   trackedHosts: DEFAULT_TRACKED_HOSTS,
   minVisibleTimeMs: 1000,
@@ -19,6 +20,7 @@ export function normalizeSettings(settings?: Partial<AppSettings>): AppSettings 
       : DEFAULT_TRACKED_HOSTS
 
   return {
+    language: normalizeLanguage(settings?.language),
     trackMode: settings?.trackMode === 'selected' ? 'selected' : 'all',
     trackedHosts: trackedHosts.map((host) => ({
       name: host.name || host.domain || host.pattern || 'site',
@@ -97,6 +99,21 @@ export function normalizeDomain(domain: string) {
 
 function normalizePattern(pattern: string) {
   return pattern.trim().toLowerCase()
+}
+
+function normalizeLanguage(language?: string) {
+  if (language === 'ru' || language === 'en') return language
+
+  return detectedLanguage()
+}
+
+function detectedLanguage() {
+  const browserLanguage =
+    globalThis.chrome?.i18n?.getUILanguage?.() ||
+    globalThis.navigator?.language ||
+    ''
+
+  return browserLanguage.toLowerCase().startsWith('ru') ? 'ru' : 'en'
 }
 
 function hostFromUrl(url: string) {

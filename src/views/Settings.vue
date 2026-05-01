@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { AppSettings, TrackedHost } from '../types'
+import type { AppLanguage, AppSettings, TrackedHost } from '../types'
+import { translate } from '../i18n'
 import { useMainStore } from '../stores/main'
 import { normalizeDomain, normalizeSettings } from '../stores/tracked'
 
@@ -20,6 +21,8 @@ let draftHostId = 0
 
 const draft = ref<DraftSettings>(cloneSettings(store.settings))
 const animateTrackedList = ref(false)
+const t = computed(() => translate.bind(null, draft.value.language))
+const languages: AppLanguage[] = ['ru', 'en']
 const minVisibleSeconds = computed({
   get: () => Math.round(draft.value.minVisibleTimeMs / 1000),
   set: (value: number) => {
@@ -119,7 +122,7 @@ function cloneSettings(settings: AppSettings): DraftSettings {
             d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
           />
         </svg>
-        Назад
+        {{ t('back') }}
       </button>
 
       <button
@@ -141,7 +144,7 @@ function cloneSettings(settings: AppSettings): DraftSettings {
             d="m4.5 12.75 6 6 9-13.5"
           />
         </svg>
-        Сохранить
+        {{ t('save') }}
       </button>
     </div>
 
@@ -149,11 +152,34 @@ function cloneSettings(settings: AppSettings): DraftSettings {
       <div class="flex flex-col gap-4">
         <section class="flex flex-col gap-2">
           <h2 class="text-sm font-semibold uppercase text-blue-300/90">
-            Отслеживание
+            {{ t('language') }}
+          </h2>
+
+          <div class="grid grid-cols-2 rounded border border-white/10 bg-zinc-900 p-1">
+            <button
+              v-for="language in languages"
+              :key="language"
+              type="button"
+              class="h-8 rounded text-sm font-semibold transition"
+              :class="
+                draft.language === language
+                  ? 'bg-blue-950 text-white shadow shadow-black/20'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              "
+              @click="draft.language = language"
+            >
+              {{ language === 'ru' ? t('russian') : t('english') }}
+            </button>
+          </div>
+        </section>
+
+        <section class="flex flex-col gap-2">
+          <h2 class="text-sm font-semibold uppercase text-blue-300/90">
+            {{ t('tracking') }}
           </h2>
 
           <label class="flex items-center justify-between gap-3 text-sm">
-            <span>Отслеживать только выбранные сайты</span>
+            <span>{{ t('trackSelectedOnly') }}</span>
             <input
               v-model="draft.trackMode"
               type="checkbox"
@@ -166,11 +192,11 @@ function cloneSettings(settings: AppSettings): DraftSettings {
 
         <section class="flex flex-col gap-2">
           <h2 class="text-sm font-semibold uppercase text-blue-300/90">
-            Показ элементов
+            {{ t('itemDisplay') }}
           </h2>
 
           <label class="flex flex-col gap-1 text-sm">
-            <span class="text-white/70">Минимальное время, секунд</span>
+            <span class="text-white/70">{{ t('minVisibleTimeSeconds') }}</span>
             <input
               v-model.number="minVisibleSeconds"
               type="number"
@@ -184,13 +210,13 @@ function cloneSettings(settings: AppSettings): DraftSettings {
         <section class="flex flex-col gap-2">
           <div class="flex items-center justify-between gap-2">
             <h2 class="text-sm font-semibold uppercase text-blue-300/90">
-              Сайты
+              {{ t('sites') }}
             </h2>
 
             <button
               type="button"
               class="grid size-8 place-items-center rounded bg-blue-950 text-white transition hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500/70"
-              title="Добавить сайт"
+              :title="t('addSite')"
               @click="addTrackedHost"
             >
               <svg
@@ -215,57 +241,57 @@ function cloneSettings(settings: AppSettings): DraftSettings {
             :name="animateTrackedList ? 'tracked-list' : undefined"
             class="tracked-list relative flex flex-col gap-2"
           >
-          <div
-            v-for="(host, index) in draft.trackedHosts"
-            :key="host.draftId"
-            class="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 rounded border border-white/10 bg-zinc-900/70 p-2"
-          >
-            <input
-              v-model="host.enabled"
-              type="checkbox"
-              class="size-4 accent-blue-500"
-              title="Включен"
-            />
-            <input
-              v-model="host.name"
-              type="text"
-              placeholder="Название"
-              class="h-9 min-w-0 rounded border border-white/10 bg-zinc-950 px-2 text-sm text-white outline-none focus:border-blue-500"
-            />
-            <input
-              v-model="host.domain"
-              type="text"
-              placeholder="Домен"
-              class="h-9 min-w-0 rounded border border-white/10 bg-zinc-950 px-2 text-sm text-white outline-none focus:border-blue-500"
-            />
-            <input
-              v-model="host.pattern"
-              type="text"
-              placeholder="Паттерн"
-              class="h-9 min-w-0 rounded border border-white/10 bg-zinc-950 px-2 text-sm text-white outline-none focus:border-blue-500"
-            />
-            <button
-              type="button"
-              class="grid size-8 place-items-center rounded text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
-              title="Удалить сайт"
-              @click="removeTrackedHost(index)"
+            <div
+              v-for="(host, index) in draft.trackedHosts"
+              :key="host.draftId"
+              class="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 rounded border border-white/10 bg-zinc-900/70 p-2"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke-width="1.5"
-                stroke="currentColor"
-                class="size-5"
+              <input
+                v-model="host.enabled"
+                type="checkbox"
+                class="size-4 accent-blue-500"
+                :title="t('enabled')"
+              />
+              <input
+                v-model="host.name"
+                type="text"
+                :placeholder="t('name')"
+                class="h-9 min-w-0 rounded border border-white/10 bg-zinc-950 px-2 text-sm text-white outline-none focus:border-blue-500"
+              />
+              <input
+                v-model="host.domain"
+                type="text"
+                :placeholder="t('domain')"
+                class="h-9 min-w-0 rounded border border-white/10 bg-zinc-950 px-2 text-sm text-white outline-none focus:border-blue-500"
+              />
+              <input
+                v-model="host.pattern"
+                type="text"
+                :placeholder="t('pattern')"
+                class="h-9 min-w-0 rounded border border-white/10 bg-zinc-950 px-2 text-sm text-white outline-none focus:border-blue-500"
+              />
+              <button
+                type="button"
+                class="grid size-8 place-items-center rounded text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
+                :title="t('deleteSite')"
+                @click="removeTrackedHost(index)"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M6 18 18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="size-5"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M6 18 18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
           </TransitionGroup>
         </section>
 
@@ -274,7 +300,7 @@ function cloneSettings(settings: AppSettings): DraftSettings {
           class="flex h-10 items-center justify-center gap-2 rounded border border-red-500/30 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-500/50"
           @click="store.clear"
         >
-          Очистить статистику
+          {{ t('clearStats') }}
         </button>
       </div>
     </div>

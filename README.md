@@ -44,6 +44,12 @@ Each tracked site entry contains:
 
 More specific URL patterns are checked before broader domain-style matches.
 
+## Language
+
+The extension supports Russian and English.
+
+On first launch, the language is detected automatically from the browser UI language. If the browser language starts with `ru`, Russian is used; otherwise English is used. After you manually select a language in settings, that choice is saved and used on future launches.
+
 ## Loading in Chrome
 
 1. Run `npm run build`.

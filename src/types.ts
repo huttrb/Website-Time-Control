@@ -14,6 +14,8 @@ export type TimeFilter =
   | 'month'
   | 'custom'
 
+export type AppLanguage = 'ru' | 'en'
+
 export interface TrackedHost {
   name: string
   pattern: string
@@ -22,6 +24,7 @@ export interface TrackedHost {
 }
 
 export interface AppSettings {
+  language: AppLanguage
   trackMode: 'all' | 'selected'
   trackedHosts: TrackedHost[]
   minVisibleTimeMs: number
