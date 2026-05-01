@@ -35,6 +35,8 @@ const customStartKey = ref<string | null>(null)
 const customEndKey = ref<string | null>(null)
 const draftDateRange = ref<Date[] | null>(null)
 const isCalendarOpen = ref(false)
+const animateStatsList = ref(false)
+let statsAnimationTimeout: number | null = null
 
 const timeFilters = computed<{ value: TimeFilter; label: string }[]>(() => {
   const weekRange = statsDateRangeForFilter('week')
@@ -82,7 +84,8 @@ const customDateLabel = computed(() => {
     const start = dateFromKey(customStartKey.value)
     const end = dateFromKey(customEndKey.value)
 
-    if (start && end) return `Выбрано (${formatDate(start)} - ${formatDate(end)})`
+    if (start && end)
+      return `Выбрано (${formatDate(start)} - ${formatDate(end)})`
   }
 
   if (customStartKey.value) {
@@ -135,7 +138,10 @@ const activeTabStat = computed(() => {
 const activeTabTime = computed(() => {
   if (!activeTabStat.value) return 0
 
-  return timeForFilter(activeTabStat.value.time, activeTabStat.value.daily || {})
+  return timeForFilter(
+    activeTabStat.value.time,
+    activeTabStat.value.daily || {},
+  )
 })
 
 const stats = computed(() =>
@@ -146,17 +152,27 @@ const stats = computed(() =>
       value,
       filteredTime: timeForFilter(value.time, value.daily || {}),
     }))
-    .filter(({ filteredTime }) => filteredTime >= store.settings.minVisibleTimeMs)
+    .filter(
+      ({ filteredTime }) => filteredTime >= store.settings.minVisibleTimeMs,
+    )
     .sort((a, b) => {
       if (a.value.isFavorite && !b.value.isFavorite) return -1
       if (!a.value.isFavorite && b.value.isFavorite) return 1
       if (sortMode.value === 'nameAsc')
-        return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+        return a.label.localeCompare(b.label, undefined, {
+          sensitivity: 'base',
+        })
       if (sortMode.value === 'nameDesc')
-        return b.label.localeCompare(a.label, undefined, { sensitivity: 'base' })
+        return b.label.localeCompare(a.label, undefined, {
+          sensitivity: 'base',
+        })
       if (sortMode.value === 'timeAsc') return a.filteredTime - b.filteredTime
       return b.filteredTime - a.filteredTime
     }),
+)
+
+const statsListTransitionName = computed(() =>
+  animateStatsList.value ? 'stat-list' : 'stat-list-soft',
 )
 
 onMounted(() => {
@@ -171,6 +187,10 @@ onBeforeUnmount(() => {
   chrome.tabs.onActivated.removeListener(refreshActiveTab)
   chrome.tabs.onUpdated.removeListener(handleTabUpdate)
   window.removeEventListener('click', closeMenus)
+
+  if (statsAnimationTimeout) {
+    window.clearTimeout(statsAnimationTimeout)
+  }
 })
 
 watch(
@@ -196,6 +216,7 @@ function selectTimeFilter(filter: TimeFilter) {
   }
 
   timeFilter.value = filter
+
   isCalendarOpen.value = false
   isTimeOpen.value = false
 }
@@ -212,6 +233,46 @@ function openCalendar() {
 function selectSortMode(mode: SortMode) {
   sortMode.value = mode
   isSortOpen.value = false
+}
+
+function toggleFavourite(site: string) {
+  runStatsListAnimation()
+  store.toggleFavourite(site)
+}
+
+function removeStat(site: string) {
+  runStatsListAnimation()
+  store.remove(site)
+}
+
+function runStatsListAnimation() {
+  animateStatsList.value = true
+
+  if (statsAnimationTimeout) {
+    window.clearTimeout(statsAnimationTimeout)
+  }
+
+  statsAnimationTimeout = window.setTimeout(() => {
+    animateStatsList.value = false
+    statsAnimationTimeout = null
+  }, 260)
+}
+
+function freezeLeavingStat(el: Element) {
+  const item = el as HTMLElement
+  const list = item.parentElement
+  if (!list) return
+
+  const itemRect = item.getBoundingClientRect()
+  const listRect = list.getBoundingClientRect()
+
+  item.style.position = 'absolute'
+  item.style.left = `${itemRect.left - listRect.left}px`
+  item.style.top = `${itemRect.top - listRect.top}px`
+  item.style.width = `${itemRect.width}px`
+  item.style.height = `${itemRect.height}px`
+  item.style.zIndex = '1'
+  item.style.pointerEvents = 'none'
 }
 
 function closeMenus(event: MouseEvent) {
@@ -299,7 +360,9 @@ function dateKeysForFilter(filter: Exclude<TimeFilter, 'all' | 'custom'>) {
   )
 }
 
-function statsDateRangeForFilter(filter: Exclude<TimeFilter, 'all' | 'custom'>) {
+function statsDateRangeForFilter(
+  filter: Exclude<TimeFilter, 'all' | 'custom'>,
+) {
   return statsDateRange(dateKeysForFilter(filter))
 }
 
@@ -328,6 +391,7 @@ function applyCustomDateRange() {
   customStartKey.value = localDateKey(start)
   customEndKey.value = localDateKey(end)
   timeFilter.value = 'custom'
+
   isCalendarOpen.value = false
 }
 
@@ -464,7 +528,6 @@ function formattedTime(ms: number): string {
                 />
               </svg>
             </button>
-
           </div>
         </Transition>
       </div>
@@ -540,58 +603,60 @@ function formattedTime(ms: number): string {
         @click.self="closeCalendar"
       >
         <div
-          class="calendar-panel w-full max-w-[370px] rounded-lg border border-white/10 bg-zinc-900 p-3 shadow-2xl shadow-black/60"
+          class="calendar-panel w-full max-w-92.5 rounded-lg border border-white/10 bg-zinc-900 p-3 shadow-2xl shadow-black/60"
           @click.stop
         >
-        <div class="mb-3 flex items-center justify-between gap-3">
-          <div class="min-w-0">
-            <div class="text-sm font-semibold text-white">Выбор дат</div>
-            <div class="truncate text-xs text-white/50">{{ draftDateLabel }}</div>
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-sm font-semibold text-white">Выбор дат</div>
+              <div class="truncate text-xs text-white/50">
+                {{ draftDateLabel }}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="grid size-8 shrink-0 place-items-center rounded text-white/60 transition hover:bg-white/10 hover:text-white"
+              title="Закрыть"
+              @click="closeCalendar"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="size-5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M6 18 18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
           </div>
 
-          <button
-            type="button"
-            class="grid size-8 shrink-0 place-items-center rounded text-white/60 transition hover:bg-white/10 hover:text-white"
-            title="Закрыть"
-            @click="closeCalendar"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke-width="1.5"
-              stroke="currentColor"
-              class="size-5"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M6 18 18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <VueDatePicker
-          :model-value="draftDateRange"
-          inline
-          dark
-          range
-          auto-apply
-          :time-picker="false"
-          :locale="ru"
-          :week-start="1"
-          :enable-time-picker="false"
-          :allowed-dates="availableDates"
-          :clearable="false"
-          :action-row="{
-            showSelect: false,
-            showCancel: false,
-            showNow: false,
-            showPreview: false,
-          }"
-          @update:model-value="handleDateRangeUpdate"
-        />
+          <VueDatePicker
+            :model-value="draftDateRange"
+            inline
+            dark
+            range
+            auto-apply
+            :time-picker="false"
+            :locale="ru"
+            :week-start="1"
+            :enable-time-picker="false"
+            :allowed-dates="availableDates"
+            :clearable="false"
+            :action-row="{
+              showSelect: false,
+              showCancel: false,
+              showNow: false,
+              showPreview: false,
+            }"
+            @update:model-value="handleDateRangeUpdate"
+          />
         </div>
       </div>
     </Transition>
@@ -603,77 +668,77 @@ function formattedTime(ms: number): string {
         Текущая вкладка
       </div>
       <div class="min-h-10">
-      <div
-        v-if="activeTab"
-        :key="activeTab.site"
-        class="flex min-h-10 items-center gap-2.5"
-      >
-        <svg
-          @click="store.toggleFavourite(activeTab.site)"
-          :fill="activeTabStat?.isFavorite ? 'currentColor' : 'none'"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
-          :class="[
-            'favorite-star size-6 shrink-0 cursor-pointer transition hover:scale-110',
-            { 'is-favorite text-amber-300': activeTabStat?.isFavorite },
-          ]"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"
-          />
-        </svg>
+        <div v-if="activeTab" class="flex min-h-10 items-center gap-2.5">
+          <svg
+            @click="toggleFavourite(activeTab.site)"
+            :fill="activeTabStat?.isFavorite ? 'currentColor' : 'none'"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            :class="[
+              'favorite-star size-6 shrink-0 cursor-pointer transition hover:scale-110',
+              { 'is-favorite text-amber-300': activeTabStat?.isFavorite },
+            ]"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"
+            />
+          </svg>
 
-        <img :src="activeTab.favicon" class="size-5 shrink-0 rounded" />
+          <img :src="activeTab.favicon" class="size-5 shrink-0 rounded" />
 
-        <div class="min-w-0 flex-1">
-          <div class="truncate text-sm font-semibold" :title="activeTab.title">
-            {{ activeTab.title }}
+          <div class="min-w-0 flex-1">
+            <div
+              class="truncate text-sm font-semibold"
+              :title="activeTab.title"
+            >
+              {{ activeTab.title }}
+            </div>
+            <div class="truncate text-xs text-white/60" :title="activeTab.host">
+              {{ activeTab.host }}
+            </div>
           </div>
-          <div class="truncate text-xs text-white/60" :title="activeTab.host">
-            {{ activeTab.host }}
-          </div>
+
+          <span
+            class="shrink-0 text-sm font-bold"
+            v-html="formattedTime(activeTabTime)"
+          ></span>
+
+          <svg
+            @click="removeStat(activeTab.site)"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="size-6 shrink-0 cursor-pointer text-red-700 transition hover:scale-130 hover:text-red-500"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6 18 18 6M6 6l12 12"
+            />
+          </svg>
         </div>
-
-        <span
-          class="shrink-0 text-sm font-bold"
-          v-html="formattedTime(activeTabTime)"
-        ></span>
-
-        <svg
-          @click="store.remove(activeTab.site)"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-          stroke="currentColor"
-          class="size-6 shrink-0 cursor-pointer text-red-700 transition hover:scale-130 hover:text-red-500"
+        <div
+          v-else
+          key="empty-tab"
+          class="flex min-h-10 items-center text-sm text-white/60"
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M6 18 18 6M6 6l12 12"
-          />
-        </svg>
-      </div>
-      <div
-        v-else
-        key="empty-tab"
-        class="flex min-h-10 items-center text-sm text-white/60"
-      >
-        Активная вкладка не найдена
-      </div>
+          Активная вкладка не найдена
+        </div>
       </div>
     </div>
 
     <div class="h-82 overflow-x-hidden overflow-y-auto pr-2 custom-scrollbar">
       <TransitionGroup
         tag="ul"
-        name="stat-list"
+        :name="statsListTransitionName"
         class="stat-list relative flex flex-col gap-4"
+        @before-leave="freezeLeavingStat"
       >
         <li
           v-for="{ site, label, value, filteredTime } in stats"
@@ -683,7 +748,7 @@ function formattedTime(ms: number): string {
           <div class="flex justify-between items-center w-full">
             <div class="flex gap-2 items-center">
               <svg
-                @click="store.toggleFavourite(site)"
+                @click="toggleFavourite(site)"
                 :fill="value.isFavorite ? 'currentColor' : 'none'"
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
@@ -711,7 +776,7 @@ function formattedTime(ms: number): string {
             <span class="font-bold" v-html="formattedTime(filteredTime)"></span>
           </div>
           <svg
-            @click="store.remove(site)"
+            @click="removeStat(site)"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -777,12 +842,34 @@ function formattedTime(ms: number): string {
     transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.stat-list-soft-move,
+.stat-list-soft-enter-active,
+.stat-list-soft-leave-active {
+  transition:
+    opacity 150ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .stat-list-leave-active {
+  pointer-events: none;
+}
+
+.stat-list-soft-leave-active {
   pointer-events: none;
 }
 
 .stat-list-enter-from,
 .stat-list-leave-to {
+  opacity: 0;
+  transform: scale(0.99);
+}
+
+.stat-list-soft-enter-from {
+  opacity: 0;
+  transform: translateY(3px);
+}
+
+.stat-list-soft-leave-to {
   opacity: 0;
   transform: scale(0.99);
 }
@@ -823,6 +910,9 @@ function formattedTime(ms: number): string {
   .stat-list-move,
   .stat-list-enter-active,
   .stat-list-leave-active,
+  .stat-list-soft-move,
+  .stat-list-soft-enter-active,
+  .stat-list-soft-leave-active,
   .favorite-star {
     transition: none;
     animation: none;
