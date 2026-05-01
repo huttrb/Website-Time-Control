@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
+import type { Marker } from '@vuepic/vue-datepicker'
 import { ru } from 'date-fns/locale'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { TimeFilter } from '../types'
@@ -127,6 +128,15 @@ const availableDates = computed(() =>
   Array.from(availableDateKeys.value)
     .map(dateFromKey)
     .filter((date): date is Date => Boolean(date)),
+)
+
+const availableDateMarkers = computed<Marker[]>(() =>
+  availableDates.value.map((date) => ({
+    date,
+    type: 'dot',
+    color: '#38bdf8',
+    tooltip: [{ text: 'Есть статистика' }],
+  })),
 )
 
 const activeTabStat = computed(() => {
@@ -648,6 +658,8 @@ function formattedTime(ms: number): string {
             :week-start="1"
             :enable-time-picker="false"
             :allowed-dates="availableDates"
+            :highlight="{ dates: availableDates }"
+            :markers="availableDateMarkers"
             :clearable="false"
             :action-row="{
               showSelect: false,
@@ -931,6 +943,28 @@ function formattedTime(ms: number): string {
 :deep(.dp__menu) {
   width: 100%;
   min-width: 0;
+}
+
+:deep(.dp__cell_highlight:not(.dp__active_date)) {
+  border-color: rgb(56 189 248 / 55%);
+  background: rgb(56 189 248 / 18%);
+  color: #e0f2fe;
+  font-weight: 700;
+}
+
+:deep(.dp__cell_highlight:not(.dp__active_date):hover) {
+  background: rgb(56 189 248 / 28%);
+}
+
+:deep(.dp__cell_disabled:not(.dp__cell_highlight)) {
+  opacity: 0.35;
+}
+
+:deep(.dp__marker_dot) {
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  box-shadow: 0 0 6px rgb(56 189 248 / 80%);
 }
 
 .custom-scrollbar::-webkit-scrollbar {
