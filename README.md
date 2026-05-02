@@ -1,20 +1,58 @@
 # Website Time Control
 
-A Chrome extension for tracking how much time you spend on websites. It shows per-site usage time, supports favorites, date filters, custom tracked site rules, and a compact popup UI designed for quick checks.
+> A compact Chrome extension for tracking website usage, reviewing trends, and keeping custom time rules under control.
 
-[Russian version](README.ru.md)
+[![Manifest V3](https://img.shields.io/badge/Manifest-V3-4285F4?style=flat-square)](public/manifest.json)
+[![Vue 3](https://img.shields.io/badge/Vue-3-42b883?style=flat-square)](https://vuejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-ready-3178c6?style=flat-square)](https://www.typescriptlang.org/)
+[![Storage](https://img.shields.io/badge/Data-local%20storage-7c3aed?style=flat-square)](#privacy)
 
-## Features
+[Русская версия](README.ru.md)
 
-- Tracks time spent on active browser tabs.
-- Shows usage by Today, Yesterday, Week, Month, All time, or a custom date range.
-- Highlights available dates in the calendar when statistics exist for them.
-- Lets you mark sites as favorites and keeps them at the top of the list.
-- Supports tracking all websites or only selected sites.
-- Supports custom tracking rules with name, domain, pattern, and enabled state.
-- Uses stable tracking keys so different domains can share the same display name without merging their statistics.
-- Stores settings and statistics locally with `chrome.storage.local`.
-- Runs as a Manifest V3 extension.
+## Overview
+
+Website Time Control tracks how much time you spend on active browser tabs and stores the statistics locally. The popup includes a quick usage list, date filters, custom tracking rules, settings, and a separate statistics page with summaries and charts.
+
+## Highlights
+
+| Area | What it does |
+| --- | --- |
+| Tracking | Measures time spent on the active tab and saves it per site or custom rule. |
+| Filters | Shows Today, Yesterday, Week, Month, All time, and a custom date range. |
+| Statistics | Provides a dedicated page with totals, averages, top sites, domain groups, daily dynamics, best day, streak, and recent activity. |
+| Rules | Supports named tracking rules with domain, URL pattern, and enabled state. |
+| Favorites | Pins important sites to the top of the main popup list. |
+| Privacy | Keeps settings and usage data in `chrome.storage.local`. |
+
+## Screens
+
+### Popup
+
+- Current active tab with favicon and tracked time.
+- Sort and time filters.
+- Favorite toggle and quick delete actions.
+- Date picker with highlighted days that contain statistics.
+
+### Statistics Page
+
+Open it from the chart icon in the top-right toolbar, next to settings.
+
+- Total tracked time and average per active day.
+- Time spent on favorite sites.
+- Longest active-day streak.
+- Quick period cards for today, week, month, and all time.
+- 14-day activity chart with hover details.
+- Top sites with percentage bars.
+- Domain-level breakdown.
+- Best day, top site, tracked site count, and recent activity.
+
+### Settings Page
+
+- Language selection.
+- Track all sites or only selected rules.
+- Minimum visible time threshold.
+- Add, edit, enable, disable, and remove custom tracked sites.
+- Clear all saved statistics.
 
 ## How Tracking Works
 
@@ -31,16 +69,18 @@ When **Track only selected sites** is enabled:
 - Only enabled entries from the tracking list are tracked.
 - Tabs that do not match any enabled rule are ignored.
 
-Tracking rules are matched by pattern/domain. The display name is only a label, so two different domains may use the same name without conflicts.
+Tracking rules are matched by URL pattern and domain. The display name is only a label, so two different domains can share the same name without merging their statistics.
 
 ## Tracking Rules
 
 Each tracked site entry contains:
 
-- **Name**: label shown in the popup.
-- **Domain**: domain used for favicon lookup and fallback matching.
-- **Pattern**: URL fragment used for more specific matching.
-- **Enabled**: whether the rule is active.
+| Field | Purpose |
+| --- | --- |
+| `Name` | Label shown in the popup and statistics page. |
+| `Domain` | Domain used for favicon lookup and fallback matching. |
+| `Pattern` | URL fragment used for more specific matching. |
+| `Enabled` | Whether the rule is active. |
 
 More specific URL patterns are checked before broader domain-style matches.
 

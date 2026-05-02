@@ -14,13 +14,37 @@ onMounted(() => {
 </script>
 
 <template>
-  <h1 class="mb-4 text-center text-2xl uppercase">🌐 Time Control</h1>
+  <h1 class="mb-4 text-2xl uppercase">🌐 Time Control</h1>
 
-  <Transition name="settings-button">
+  <div class="absolute right-4 top-4 flex items-center gap-2">
+    <RouterLink
+      v-if="route.path !== '/statistics'"
+      key="statistics"
+      to="/statistics"
+      class="grid size-9 place-items-center rounded-full bg-blue-950 text-white shadow-lg shadow-black/20 transition hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500/70"
+      :title="t('statistics')"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="1.5"
+        stroke="currentColor"
+        class="size-6"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z"
+        />
+      </svg>
+    </RouterLink>
+
     <RouterLink
       v-if="route.path !== '/settings'"
+      key="settings"
       to="/settings"
-      class="absolute right-4 top-4 grid size-9 place-items-center rounded-full bg-blue-950 text-white shadow-lg shadow-black/20 transition hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500/70"
+      class="grid size-9 place-items-center rounded-full bg-blue-950 text-white shadow-lg shadow-black/20 transition hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500/70"
       :title="t('settings')"
     >
       <svg
@@ -43,7 +67,7 @@ onMounted(() => {
         />
       </svg>
     </RouterLink>
-  </Transition>
+  </div>
 
   <RouterView v-slot="{ Component }">
     <Transition name="view-slide" mode="out-in">
@@ -70,24 +94,9 @@ onMounted(() => {
   transform: translateX(-10px);
 }
 
-.settings-button-enter-active,
-.settings-button-leave-active {
-  transition:
-    opacity 160ms ease,
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.settings-button-enter-from,
-.settings-button-leave-to {
-  opacity: 0;
-  transform: scale(0.88) rotate(-12deg);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .view-slide-enter-active,
-  .view-slide-leave-active,
-  .settings-button-enter-active,
-  .settings-button-leave-active {
+  .view-slide-leave-active {
     transition: none;
   }
 }
