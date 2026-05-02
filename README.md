@@ -40,8 +40,8 @@ Open it from the chart icon in the top-right toolbar, next to settings.
 - Total tracked time and average per active day.
 - Time spent on favorite sites.
 - Longest active-day streak.
-- Quick period cards for today, week, month, and all time.
-- 14-day activity chart with hover details.
+- Horizontal period selector for Today, Yesterday, Week, Month, All time, and a custom date range.
+- Activity chart with compact day labels, hover details, and a calendar that highlights days with saved statistics. For longer periods, the chart focuses on the latest 14 days.
 - Top sites with percentage bars.
 - Domain-level breakdown.
 - Best day, top site, tracked site count, and recent activity.

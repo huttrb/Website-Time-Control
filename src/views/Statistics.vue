@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
+import type { Marker } from '@vuepic/vue-datepicker'
+import { enUS, ru } from 'date-fns/locale'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import type { TimeFilter } from '../types'
 import { translate } from '../i18n'
 import { useMainStore } from '../stores/main'
-
-type RangeKey = 'today' | 'week' | 'month' | 'all'
 
 interface StatRow {
   site: string
@@ -18,7 +21,22 @@ interface StatRow {
 const router = useRouter()
 const store = useMainStore()
 const t = computed(() => translate.bind(null, store.settings.language))
-const rangeKeys: RangeKey[] = ['today', 'week', 'month', 'all']
+const timeFilter = ref<TimeFilter>('all')
+const customStartKey = ref<string | null>(null)
+const customEndKey = ref<string | null>(null)
+const draftDateRange = ref<Date[] | null>(null)
+const isCalendarOpen = ref(false)
+const rangeKeys: TimeFilter[] = [
+  'today',
+  'yesterday',
+  'week',
+  'month',
+  'all',
+  'custom',
+]
+const calendarLocale = computed(() =>
+  store.settings.language === 'ru' ? ru : enUS,
+)
 
 const rows = computed<StatRow[]>(() =>
   Object.entries(store.stats)
@@ -35,15 +53,30 @@ const rows = computed<StatRow[]>(() =>
 )
 
 const visibleRows = computed(() =>
-  rows.value.filter((row) => row.totalTime >= store.settings.minVisibleTimeMs),
+  periodRows.value.filter(
+    (row) => row.totalTime >= store.settings.minVisibleTimeMs,
+  ),
+)
+
+const periodRows = computed<StatRow[]>(() =>
+  rows.value
+    .map((row) => ({
+      ...row,
+      totalTime: timeForRowRange(row),
+    }))
+    .filter((row) => row.totalTime > 0)
+    .sort((a, b) => b.totalTime - a.totalTime),
 )
 
 const totalTime = computed(() =>
-  rows.value.reduce((sum, row) => sum + row.totalTime, 0),
+  periodRows.value.reduce((sum, row) => sum + row.totalTime, 0),
 )
 
 const favoriteTime = computed(() =>
-  rows.value.reduce((sum, row) => sum + (row.isFavorite ? row.totalTime : 0), 0),
+  periodRows.value.reduce(
+    (sum, row) => sum + (row.isFavorite ? row.totalTime : 0),
+    0,
+  ),
 )
 
 const trackedDays = computed(() => {
@@ -58,13 +91,58 @@ const trackedDays = computed(() => {
   return Array.from(keys).sort()
 })
 
-const activeDaysCount = computed(() => trackedDays.value.length)
-const averagePerDay = computed(() =>
-  activeDaysCount.value ? totalTime.value / activeDaysCount.value : 0,
+const availableDates = computed(() =>
+  trackedDays.value.map(dateFromKey).filter((date) => date.getFullYear() > 0),
 )
 
+const availableDateMarkers = computed<Marker[]>(() =>
+  availableDates.value.map((date) => ({
+    date,
+    type: 'dot',
+    color: '#38bdf8',
+    tooltip: [{ text: t.value('hasStats') }],
+  })),
+)
+
+const activeDaysCount = computed(() => trackedDays.value.length)
+const averagePerDay = computed(() =>
+  periodActiveDaysCount.value ? totalTime.value / periodActiveDaysCount.value : 0,
+)
+
+const periodActiveDaysCount = computed(() => {
+  const keys = selectedDateKeys.value
+
+  if (keys.length) {
+    return keys.filter((key) =>
+      rows.value.some((row) => (row.daily[key] || 0) > 0),
+    ).length
+  }
+
+  return activeDaysCount.value
+})
+
+const selectedDateKeys = computed(() => dateKeysForFilter(timeFilter.value))
+
+const filterOptions = computed(() =>
+  rangeKeys.map((filter) => ({
+    value: filter,
+    label: filterLabel(filter),
+  })),
+)
+
+const chartRangeLabel = computed(() => {
+  if (selectedDateKeys.value.length > 14 || timeFilter.value === 'all') {
+    return t.value('last14Days')
+  }
+
+  if (timeFilter.value === 'custom') return customDateLabel()
+
+  return filterLabel(timeFilter.value)
+})
+
 const bestDay = computed(() => {
-  const best = trackedDays.value
+  const keys = selectedDateKeys.value.length ? selectedDateKeys.value : trackedDays.value
+  const best = keys
     .map((key) => ({
       key,
       time: rows.value.reduce((sum, row) => sum + (row.daily[key] || 0), 0),
@@ -74,23 +152,17 @@ const bestDay = computed(() => {
   return best || { key: localDateKey(new Date()), time: 0 }
 })
 
-const topSite = computed(() => rows.value[0] || null)
-
-const rangeStats = computed(() =>
-  rangeKeys.map((range) => ({
-    key: range,
-    label: rangeLabel(range),
-    time: timeForRange(range),
-  })),
-)
+const topSite = computed(() => periodRows.value[0] || null)
 
 const dailyBars = computed(() => {
-  const values = lastDays(14).map((date) => {
+  const dates = datesForChart()
+  const values = dates.map((date) => {
     const key = localDateKey(date)
 
     return {
       key,
       label: shortDate(date),
+      dayLabel: String(date.getDate()).padStart(2, '0'),
       time: rows.value.reduce((sum, row) => sum + (row.daily[key] || 0), 0),
     }
   })
@@ -98,7 +170,8 @@ const dailyBars = computed(() => {
 
   return values.map((value) => ({
     ...value,
-    height: Math.max(6, Math.round((value.time / max) * 100)),
+    height:
+      value.time > 0 ? Math.max(18, Math.round((value.time / max) * 98)) : 7,
   }))
 })
 
@@ -107,7 +180,7 @@ const topRows = computed(() => visibleRows.value.slice(0, 8))
 const domainGroups = computed(() => {
   const groups = new Map<string, number>()
 
-  rows.value.forEach((row) => {
+  periodRows.value.forEach((row) => {
     groups.set(row.domain, (groups.get(row.domain) || 0) + row.totalTime)
   })
 
@@ -117,10 +190,14 @@ const domainGroups = computed(() => {
 })
 
 const recentActivity = computed(() =>
-  rows.value
+  periodRows.value
     .map((row) => {
+      const allowedKeys = selectedDateKeys.value
       const dayKeys = Object.entries(row.daily)
-        .filter(([_, time]) => time > 0)
+        .filter(
+          ([key, time]) =>
+            time > 0 && (!allowedKeys.length || allowedKeys.includes(key)),
+        )
         .map(([key]) => key)
         .sort()
       const lastKey = dayKeys[dayKeys.length - 1]
@@ -164,35 +241,115 @@ function back() {
   router.push('/')
 }
 
-function timeForRange(range: RangeKey) {
-  if (range === 'all') return totalTime.value
+function selectTimeFilter(filter: TimeFilter) {
+  if (filter === 'custom') {
+    openCalendar()
+    return
+  }
 
-  const daysByRange = {
+  timeFilter.value = filter
+  isCalendarOpen.value = false
+}
+
+function openCalendar() {
+  const start = customStartKey.value ? dateFromKey(customStartKey.value) : null
+  const end = customEndKey.value ? dateFromKey(customEndKey.value) : null
+
+  draftDateRange.value = start && end ? [start, end] : null
+  isCalendarOpen.value = true
+}
+
+function closeCalendar() {
+  isCalendarOpen.value = false
+}
+
+function handleDateRangeUpdate(value: unknown) {
+  draftDateRange.value = Array.isArray(value) ? value : null
+
+  const [start, end] = draftDateRange.value || []
+  if (start instanceof Date && end instanceof Date) {
+    customStartKey.value = localDateKey(start)
+    customEndKey.value = localDateKey(end)
+    timeFilter.value = 'custom'
+    isCalendarOpen.value = false
+  }
+}
+
+function filterLabel(filter: TimeFilter) {
+  if (filter === 'today') return t.value('today')
+  if (filter === 'yesterday') return t.value('yesterday')
+  if (filter === 'week') return t.value('week')
+  if (filter === 'month') return t.value('month')
+  if (filter === 'custom') return t.value('chooseDates')
+  return t.value('all')
+}
+
+function customDateLabel() {
+  if (customStartKey.value && customEndKey.value) {
+    return `${formatDate(dateFromKey(customStartKey.value))} - ${formatDate(
+      dateFromKey(customEndKey.value),
+    )}`
+  }
+
+  return t.value('chooseDates')
+}
+
+function timeForRowRange(row: StatRow) {
+  if (timeFilter.value === 'all') return row.totalTime
+
+  const keys = selectedDateKeys.value
+  return keys.reduce((sum, key) => sum + (row.daily[key] || 0), 0)
+}
+
+function dateKeysForFilter(filter: TimeFilter) {
+  if (filter === 'all') return []
+  if (filter === 'custom') return customDateKeys()
+
+  const daysByFilter = {
     today: 1,
+    yesterday: 1,
     week: 7,
     month: 30,
   }
+  if (filter === 'yesterday') return [localDateKey(daysAgo(1))]
 
-  const keys = new Set(
-    lastDays(daysByRange[range]).map((date) => localDateKey(date)),
-  )
-
-  return rows.value.reduce(
-    (sum, row) =>
-      sum +
-      Object.entries(row.daily).reduce(
-        (dailySum, [key, time]) => dailySum + (keys.has(key) ? time : 0),
-        0,
-      ),
-    0,
-  )
+  return lastDays(daysByFilter[filter]).map(localDateKey)
 }
 
-function rangeLabel(range: RangeKey) {
-  if (range === 'today') return t.value('today')
-  if (range === 'week') return t.value('week')
-  if (range === 'month') return t.value('month')
-  return t.value('all')
+function customDateKeys() {
+  if (!customStartKey.value) return []
+
+  const start = customStartKey.value
+  const end = customEndKey.value || customStartKey.value
+
+  return dateRangeKeys(start, end)
+}
+
+function datesForChart() {
+  if (timeFilter.value === 'all') return lastDays(14)
+
+  const keys = selectedDateKeys.value
+  if (!keys.length) return lastDays(14)
+
+  return keys.slice(-14).map(dateFromKey)
+}
+
+function dateRangeKeys(startKey: string, endKey: string) {
+  const start = dateFromKey(startKey)
+  const end = dateFromKey(endKey)
+  const keys: string[] = []
+
+  if (start > end) {
+    return dateRangeKeys(endKey, startKey)
+  }
+
+  const date = new Date(start)
+  while (date <= end) {
+    keys.push(localDateKey(date))
+    date.setDate(date.getDate() + 1)
+  }
+
+  return keys
 }
 
 function share(time: number) {
@@ -228,11 +385,21 @@ function dateFromKey(key: string) {
   return new Date(year || 0, (month || 1) - 1, day || 1)
 }
 
+function formatDate(date: Date) {
+  return `${shortDate(date)}.${date.getFullYear()}`
+}
+
 function shortDate(date: Date) {
   const day = String(date.getDate()).padStart(2, '0')
   const month = String(date.getMonth() + 1).padStart(2, '0')
 
   return `${day}.${month}`
+}
+
+function daysAgo(days: number) {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  return date
 }
 
 function lastDays(count: number) {
@@ -274,13 +441,101 @@ function lastDays(count: number) {
           {{ t('statistics') }}
         </div>
         <div class="text-xs text-white/45">
-          {{ activeDaysCount }} {{ t('activeDays') }}
+          {{ periodActiveDaysCount }} {{ t('activeDays') }}
         </div>
       </div>
     </div>
 
     <div class="custom-scrollbar flex-1 overflow-x-hidden overflow-y-auto pr-2">
       <div v-if="rows.length" class="flex flex-col gap-4">
+        <section class="rounded border border-white/10 bg-zinc-900/70 p-2">
+          <div class="flex flex-wrap gap-1.5">
+            <button
+              v-for="filter in filterOptions"
+              :key="filter.value"
+              type="button"
+              class="h-8 shrink-0 rounded px-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-500/70"
+              :class="
+                timeFilter === filter.value
+                  ? 'bg-blue-950 text-white shadow shadow-black/20'
+                  : 'bg-white/5 text-white/65 hover:bg-white/10 hover:text-white'
+              "
+              @click="selectTimeFilter(filter.value)"
+            >
+              {{ filter.label }}
+            </button>
+          </div>
+        </section>
+
+        <Transition name="modal-fade">
+          <div
+            v-if="isCalendarOpen"
+            class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
+            @click.self="closeCalendar"
+          >
+            <div
+              class="calendar-panel w-full max-w-92.5 rounded-lg border border-white/10 bg-zinc-900 p-3 shadow-2xl shadow-black/60"
+              @click.stop
+            >
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="text-sm font-semibold text-white">
+                    {{ t('dateSelection') }}
+                  </div>
+                  <div class="truncate text-xs text-white/50">
+                    {{ customDateLabel() }}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  class="grid size-8 shrink-0 place-items-center rounded text-white/60 transition hover:bg-white/10 hover:text-white"
+                  :title="t('close')"
+                  @click="closeCalendar"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="size-5"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M6 18 18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <VueDatePicker
+                :model-value="draftDateRange"
+                inline
+                dark
+                range
+                auto-apply
+                :time-picker="false"
+                :locale="calendarLocale"
+                :week-start="1"
+                :enable-time-picker="false"
+                :allowed-dates="availableDates"
+                :highlight="{ dates: availableDates }"
+                :markers="availableDateMarkers"
+                :clearable="false"
+                :action-row="{
+                  showSelect: false,
+                  showCancel: false,
+                  showNow: false,
+                  showPreview: false,
+                }"
+                @update:model-value="handleDateRangeUpdate"
+              />
+            </div>
+          </div>
+        </Transition>
+
         <section class="grid grid-cols-2 gap-2">
           <div class="rounded border border-blue-400/25 bg-blue-500/10 p-3">
             <div class="text-xs uppercase text-blue-200/80">
@@ -319,32 +574,17 @@ function lastDays(count: number) {
           </div>
         </section>
 
-        <section class="grid grid-cols-4 gap-2">
-          <div
-            v-for="range in rangeStats"
-            :key="range.key"
-            class="rounded border border-white/10 bg-zinc-900/70 p-2"
-          >
-            <div class="truncate text-xs text-white/50">
-              {{ range.label }}
-            </div>
-            <div class="mt-1 truncate text-sm font-bold">
-              {{ formattedTime(range.time) }}
-            </div>
-          </div>
-        </section>
-
         <section class="rounded border border-white/10 bg-zinc-900/70 p-3">
           <div class="mb-3 flex items-center justify-between gap-3">
             <h2 class="text-sm font-semibold uppercase text-blue-300/90">
               {{ t('dailyDynamics') }}
             </h2>
             <span class="text-xs text-white/45">
-              {{ t('last14Days') }}
+              {{ chartRangeLabel }}
             </span>
           </div>
 
-          <div class="flex h-32 items-end gap-1.5">
+          <div class="flex h-27 items-end gap-1.5 px-0 pb-0 pt-3">
             <div
               v-for="day in dailyBars"
               :key="day.key"
@@ -358,14 +598,15 @@ function lastDays(count: number) {
                 <div class="text-blue-300">{{ formattedTime(day.time) }}</div>
               </div>
 
-              <div class="flex h-24 w-full items-end">
+              <div class="flex h-22 w-full items-end">
                 <div
-                  class="w-full rounded-t bg-blue-500/80 shadow-[0_0_12px_rgba(59,130,246,0.28)] transition group-hover:bg-cyan-300"
+                  class="w-full rounded-t-sm bg-blue-500/80 shadow-[0_0_8px_rgba(59,130,246,0.22)] transition group-hover:bg-cyan-300"
+                  :class="{ 'shadow-none': day.time === 0 }"
                   :style="{ height: `${day.height}%` }"
                 ></div>
               </div>
               <span class="text-[10px] leading-none text-white/45">
-                {{ day.label.slice(0, 2) }}
+                {{ day.dayLabel }}
               </span>
             </div>
           </div>
@@ -497,6 +738,29 @@ function lastDays(count: number) {
 </template>
 
 <style scoped>
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 170ms ease;
+}
+
+.modal-fade-enter-active .calendar-panel,
+.modal-fade-leave-active .calendar-panel {
+  transition:
+    opacity 170ms ease,
+    transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-from .calendar-panel,
+.modal-fade-leave-to .calendar-panel {
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 2px;
 }
@@ -508,5 +772,63 @@ function lastDays(count: number) {
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.custom-scrollbar-x::-webkit-scrollbar {
+  height: 2px;
+}
+
+.custom-scrollbar-x::-webkit-scrollbar-thumb {
+  background-color: #2b7fff;
+  border-radius: 100%;
+}
+
+.custom-scrollbar-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:deep(.dp__action_row) {
+  display: none;
+}
+
+:deep(.dp__button_bottom),
+:deep(.dp__button[aria-label*='time' i]) {
+  display: none;
+}
+
+:deep(.dp__menu) {
+  width: 100%;
+  min-width: 0;
+}
+
+:deep(.dp__cell_highlight:not(.dp__active_date)) {
+  border-color: rgb(56 189 248 / 55%);
+  background: rgb(56 189 248 / 18%);
+  color: #e0f2fe;
+  font-weight: 700;
+}
+
+:deep(.dp__cell_highlight:not(.dp__active_date):hover) {
+  background: rgb(56 189 248 / 28%);
+}
+
+:deep(.dp__cell_disabled:not(.dp__cell_highlight)) {
+  opacity: 0.35;
+}
+
+:deep(.dp__marker_dot) {
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  box-shadow: 0 0 6px rgb(56 189 248 / 80%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-fade-enter-active,
+  .modal-fade-leave-active,
+  .modal-fade-enter-active .calendar-panel,
+  .modal-fade-leave-active .calendar-panel {
+    transition: none;
+  }
 }
 </style>
