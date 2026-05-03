@@ -150,8 +150,8 @@ export const useMainStore = defineStore('main', {
       chrome.runtime.sendMessage({ type: 'toggleFavourite', site })
     },
 
-    remove(site: string) {
-      chrome.runtime.sendMessage({ type: 'removeSite', site })
+    remove(site: string, dateKeys?: string[]) {
+      chrome.runtime.sendMessage({ type: 'removeSite', site, dateKeys })
     },
 
     clear() {

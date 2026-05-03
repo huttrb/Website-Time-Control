@@ -34,7 +34,7 @@ chrome.runtime.onSuspend.addListener(stopTracking)
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'toggleFavourite') toggleFavourite(msg.site)
-  if (msg.type === 'removeSite') removeSite(msg.site)
+  if (msg.type === 'removeSite') removeSite(msg.site, msg.dateKeys)
   if (msg.type === 'clearStats') clearStats()
 })
 
@@ -48,10 +48,44 @@ function toggleFavourite(site: string) {
   })
 }
 
-function removeSite(site: string) {
+function removeSite(site: string, dateKeys?: string[]) {
   chrome.storage.local.get('stats', (res: { stats?: Stats }) => {
     const stats = res.stats || {}
-    delete stats[site]
+    const prev = stats[site]
+
+    if (!prev) return
+
+    if (dateKeys === undefined) {
+      delete stats[site]
+      chrome.storage.local.set({ stats })
+      return
+    }
+
+    if (!dateKeys.length) return
+
+    const datesToRemove = new Set(dateKeys)
+    const daily = { ...(prev.daily || {}) }
+
+    dateKeys.forEach((key) => {
+      delete daily[key]
+    })
+
+    const nextTime = Object.values(daily).reduce((sum, time) => sum + time, 0)
+
+    if (nextTime <= 0) {
+      delete stats[site]
+    } else {
+      stats[site] = {
+        ...prev,
+        time: nextTime,
+        daily: Object.fromEntries(
+          Object.entries(daily).filter(
+            ([key, time]) => !datesToRemove.has(key) && time > 0,
+          ),
+        ),
+      }
+    }
+
     chrome.storage.local.set({ stats })
   })
 }

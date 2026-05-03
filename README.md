@@ -52,7 +52,7 @@ Open it from the chart icon in the top-right toolbar, next to settings.
 - Track all sites or only selected rules.
 - Minimum visible time threshold.
 - Add, edit, enable, disable, and remove custom tracked sites.
-- Clear all saved statistics.
+- Clear all saved statistics with confirmation.
 
 ## How Tracking Works
 

@@ -257,7 +257,7 @@ function toggleFavourite(site: string) {
 
 function removeStat(site: string) {
   runStatsListAnimation()
-  store.remove(site)
+  store.remove(site, dateKeysForCurrentFilter())
 }
 
 function runStatsListAnimation() {
@@ -359,6 +359,13 @@ function timeForFilter(totalTime: number, daily: Record<string, number>) {
     (sum, key) => sum + (daily[key] || 0),
     0,
   )
+}
+
+function dateKeysForCurrentFilter() {
+  if (timeFilter.value === 'all') return undefined
+  if (timeFilter.value === 'custom') return customDateKeys()
+
+  return dateKeysForFilter(timeFilter.value)
 }
 
 function dateKeysForFilter(filter: Exclude<TimeFilter, 'all' | 'custom'>) {

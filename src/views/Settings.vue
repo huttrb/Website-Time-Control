@@ -21,6 +21,7 @@ let draftHostId = 0
 
 const draft = ref<DraftSettings>(cloneSettings(store.settings))
 const animateTrackedList = ref(false)
+const isClearConfirmOpen = ref(false)
 const t = computed(() => translate.bind(null, draft.value.language))
 const languages: AppLanguage[] = ['ru', 'en']
 const minVisibleSeconds = computed({
@@ -70,6 +71,19 @@ function save() {
 
 function back() {
   router.push('/')
+}
+
+function requestClearStats() {
+  isClearConfirmOpen.value = true
+}
+
+function cancelClearStats() {
+  isClearConfirmOpen.value = false
+}
+
+function confirmClearStats() {
+  store.clear()
+  isClearConfirmOpen.value = false
 }
 
 function cleanTrackedHost(host: TrackedHost): TrackedHost {
@@ -297,13 +311,76 @@ function cloneSettings(settings: AppSettings): DraftSettings {
 
         <button
           type="button"
-          class="flex h-10 items-center justify-center gap-2 rounded border border-red-500/30 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-500/50"
-          @click="store.clear"
+          class="flex h-10 items-center justify-center gap-2 rounded border border-red-500/30 bg-red-500/5 text-sm font-semibold text-red-200 transition hover:bg-red-500/10 focus:border-red-500/75 focus:outline-none focus:shadow-[inset_0_0_0_1px_rgba(239,68,68,0.55)] active:border-red-500/80 active:shadow-[inset_0_0_0_1px_rgba(239,68,68,0.62)]"
+          @click="requestClearStats"
         >
           {{ t('clearStats') }}
         </button>
       </div>
     </div>
+
+    <Transition name="modal-fade">
+      <div
+        v-if="isClearConfirmOpen"
+        class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
+        @click.self="cancelClearStats"
+      >
+        <div
+          class="confirm-panel w-full max-w-88 rounded-lg border border-white/10 bg-zinc-900 p-4 shadow-2xl shadow-black/60"
+          @click.stop
+        >
+          <div class="mb-3 flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <h2 class="text-base font-bold text-red-100">
+                {{ t('clearStatsConfirmTitle') }}
+              </h2>
+              <p class="mt-1 text-sm leading-relaxed text-white/55">
+                {{ t('clearStatsConfirmDescription') }}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              class="grid size-8 shrink-0 place-items-center rounded text-white/60 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+              :title="t('close')"
+              @click="cancelClearStats"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="size-5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M6 18 18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              class="h-10 rounded bg-zinc-800 text-sm font-semibold text-white/75 transition hover:bg-zinc-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+              @click="cancelClearStats"
+            >
+              {{ t('cancel') }}
+            </button>
+            <button
+              type="button"
+              class="h-10 rounded bg-red-600/85 text-sm font-semibold text-white transition hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-400/70"
+              @click="confirmClearStats"
+            >
+              {{ t('confirm') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -329,9 +406,36 @@ function cloneSettings(settings: AppSettings): DraftSettings {
 @media (prefers-reduced-motion: reduce) {
   .tracked-list-move,
   .tracked-list-enter-active,
-  .tracked-list-leave-active {
+  .tracked-list-leave-active,
+  .modal-fade-enter-active,
+  .modal-fade-leave-active,
+  .modal-fade-enter-active .confirm-panel,
+  .modal-fade-leave-active .confirm-panel {
     transition: none;
   }
+}
+
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 170ms ease;
+}
+
+.modal-fade-enter-active .confirm-panel,
+.modal-fade-leave-active .confirm-panel {
+  transition:
+    opacity 170ms ease,
+    transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-from .confirm-panel,
+.modal-fade-leave-to .confirm-panel {
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
 }
 
 .no-spinner::-webkit-outer-spin-button,
